@@ -204,6 +204,7 @@ const (
 	MetricMemPgmajfaultCgroup  = "mem.pgmajfault.cgroup"
 	MetricMemAllocstallCgroup  = "mem.allocstall.cgroup"
 	MetricMemKswapdstealCgroup = "mem.kswapdstall.cgroup"
+	MetricMemSocketCgroup      = "mem.socket.cgroup"
 
 	MetricMemOomCgroup         = "mem.oom.cgroup"
 	MetricMemScaleFactorCgroup = "mem.scalefactor.cgroup"
