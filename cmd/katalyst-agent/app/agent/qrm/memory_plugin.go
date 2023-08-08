@@ -18,14 +18,21 @@ package qrm
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/kubewharf/katalyst-core/cmd/katalyst-agent/app/agent"
+	phconsts "github.com/kubewharf/katalyst-core/pkg/agent/utilcomponent/periodicalhandler/consts"
 	"github.com/kubewharf/katalyst-core/pkg/config"
 )
 
 const (
 	QRMPluginNameMemory = "qrm_memory_plugin"
+)
+
+var (
+	QRMMemoryPluginPeriodicalHandlerGroupName = strings.Join([]string{QRMPluginNameMemory,
+		phconsts.PeriodicalHandlersGroupNameSuffix}, phconsts.GroupNameSeparator)
 )
 
 // memoryPolicyInitializers is used to store the initializing function for cpu resource plugin policies
