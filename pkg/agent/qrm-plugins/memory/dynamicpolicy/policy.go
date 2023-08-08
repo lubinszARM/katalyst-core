@@ -45,6 +45,8 @@ import (
 	"github.com/kubewharf/katalyst-core/pkg/util/machine"
 	"github.com/kubewharf/katalyst-core/pkg/util/native"
 	"github.com/kubewharf/katalyst-core/pkg/util/timemonitor"
+	"github.com/lubinszARM/katalyst-core/cmd/katalyst-agent/app/agent/qrm"
+	"github.com/lubinszARM/katalyst-core/pkg/agent/utilcomponent/periodicalhandler"
 )
 
 const (
@@ -246,6 +248,8 @@ func (p *DynamicPolicy) Start() (err error) {
 		return fmt.Errorf("invalid memoryAdvisorSocketAbsPath: %s", p.memoryAdvisorSocketAbsPath)
 	}
 
+	periodicalhandler.ReadyToStartHandlersByGroup(qrm.QRMMemoryPluginPeriodicalHandlerGroupName)
+
 	general.Infof("start dynamic policy memory plugin with memory advisor")
 	err = p.initAdvisorClientConn()
 	if err != nil {
@@ -285,6 +289,9 @@ func (p *DynamicPolicy) Stop() error {
 		return nil
 	}
 	close(p.stopCh)
+
+	periodicalhandler.StopHandlersByGroup(qrm.QRMMemoryPluginPeriodicalHandlerGroupName)
+
 	return nil
 }
 
