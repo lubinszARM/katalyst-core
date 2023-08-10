@@ -78,7 +78,7 @@ func startAgent(ctx context.Context, genericCtx *agent.GenericContext,
 	componentMap := make(map[string]agent.Component)
 	for agentName, starter := range agents {
 		if !genericCtx.IsEnabled(agentName, conf.Agents) {
-			klog.Warningf("%q is disabled", agentName)
+			klog.Warningf("%q is disabled, Agents=%v", agentName, conf.Agents)
 			continue
 		}
 
