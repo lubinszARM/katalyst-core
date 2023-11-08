@@ -20,6 +20,7 @@ type MemoryControlKnobName string
 
 const (
 	ControlKnobKeyMemoryLimitInBytes MemoryControlKnobName = "memory_limit_in_bytes"
+	ControlKnobKeyTCPMemLimitInBytes MemoryControlKnobName = "memory_tcp_limit_in_bytes"
 	ControlKnobKeyDropCache          MemoryControlKnobName = "drop_cache"
 	ControlKnobKeyCPUSetMems         MemoryControlKnobName = "cpuset_mems"
 )
