@@ -130,6 +130,7 @@ type DynamicPolicy struct {
 
 func NewDynamicPolicy(agentCtx *agent.GenericContext, conf *config.Configuration,
 	_ interface{}, agentName string) (bool, agent.Component, error) {
+	fmt.Printf("BBLU NewDynamicPolicy 1111....\n")
 	reservedMemory, err := getReservedMemory(conf, agentCtx.MetaServer, agentCtx.MachineInfo)
 	if err != nil {
 		return false, agent.ComponentStub{}, fmt.Errorf("getReservedMemoryFromOptions failed with error: %v", err)
@@ -201,6 +202,7 @@ func NewDynamicPolicy(agentCtx *agent.GenericContext, conf *config.Configuration
 		return false, agent.ComponentStub{}, fmt.Errorf("dynamic policy new plugin wrapper failed with error: %v", err)
 	}
 
+	fmt.Printf("BBLU NewDynamicPolicy 2222.\n")
 	memoryadvisor.RegisterControlKnobHandler(memoryadvisor.ControlKnobKeyMemoryLimitInBytes,
 		memoryadvisor.ControlKnobHandlerWithChecker(handleAdvisorMemoryLimitInBytes))
 	memoryadvisor.RegisterControlKnobHandler(memoryadvisor.ControlKnobKeyCPUSetMems,

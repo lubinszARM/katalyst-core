@@ -239,18 +239,26 @@ func handleAdvisorMemoryLimitInBytes(
 
 	calculatedLimitInBytes := calculationInfo.CalculationResult.Values[string(memoryadvisor.ControlKnobKeyMemoryLimitInBytes)]
 	calculatedLimitInBytesInt64, err := strconv.ParseInt(calculatedLimitInBytes, 10, 64)
-
 	if err != nil {
 		return fmt.Errorf("parse %s: %s failed with error: %v", memoryadvisor.ControlKnobKeyMemoryLimitInBytes, calculatedLimitInBytes, err)
 	}
 
+	calculatedTCPLimitInBytes := calculationInfo.CalculationResult.Values[string(memoryadvisor.ControlKnobKeyTCPMemLimitInBytes)]
+	//	calculatedTCPLimitInBytesInt64, err := strconv.ParseInt(calculatedTCPLimitInBytes, 10, 64)
+	if err != nil {
+		//		return fmt.Errorf("parse %s: %s failed with error: %v", memoryadvisor.ControlKnobKeyTCPMemLimitInBytes, calculatedTCPLimitInBytes, err)
+		fmt.Printf("BBLU calculatedTCPLimitInBytes:%v.error=%v.\n", calculatedTCPLimitInBytes, err)
+	}
+	fmt.Printf("BBLU calculatedTCPLimitInBytes:%v..\n", calculatedTCPLimitInBytes)
+
 	if calculationInfo.CgroupPath != "" {
 		err = cgroupmgr.ApplyMemoryWithRelativePath(calculationInfo.CgroupPath, &cgroupcommon.MemoryData{
-			LimitInBytes: calculatedLimitInBytesInt64,
+			LimitInBytes:    calculatedLimitInBytesInt64,
+			TCPLimitInBytes: 214748364800,
 		})
 
 		if err != nil {
-			return fmt.Errorf("apply %s: %d to cgroup: %s failed with error: %v",
+			return fmt.Errorf("BBLU apply %s: %d to cgroup: %s failed with error: %v",
 				memoryadvisor.ControlKnobKeyMemoryLimitInBytes, calculatedLimitInBytesInt64,
 				calculationInfo.CgroupPath, err)
 		}
