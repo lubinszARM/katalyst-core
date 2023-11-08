@@ -126,10 +126,13 @@ type DynamicPolicy struct {
 	enableMemoryAdvisor        bool
 	memoryAdvisorSocketAbsPath string
 	memoryPluginSocketAbsPath  string
+
+	enableSettingSockMemLimit bool
 }
 
 func NewDynamicPolicy(agentCtx *agent.GenericContext, conf *config.Configuration,
 	_ interface{}, agentName string) (bool, agent.Component, error) {
+	fmt.Printf("BBLU NewDynamicPolicy 1111....\n")
 	reservedMemory, err := getReservedMemory(conf, agentCtx.MetaServer, agentCtx.MachineInfo)
 	if err != nil {
 		return false, agent.ComponentStub{}, fmt.Errorf("getReservedMemoryFromOptions failed with error: %v", err)
@@ -180,6 +183,7 @@ func NewDynamicPolicy(agentCtx *agent.GenericContext, conf *config.Configuration
 		enableMemoryAdvisor:        conf.EnableMemoryAdvisor,
 		memoryAdvisorSocketAbsPath: conf.MemoryAdvisorSocketAbsPath,
 		memoryPluginSocketAbsPath:  conf.MemoryPluginSocketAbsPath,
+		enableSettingSockMemLimit:  conf.EnableSettingSockMemLimit,
 		extraControlKnobConfigs:    extraControlKnobConfigs, // [TODO]: support modifying extraControlKnobConfigs by KCC
 	}
 
@@ -201,6 +205,7 @@ func NewDynamicPolicy(agentCtx *agent.GenericContext, conf *config.Configuration
 		return false, agent.ComponentStub{}, fmt.Errorf("dynamic policy new plugin wrapper failed with error: %v", err)
 	}
 
+	fmt.Printf("BBLU NewDynamicPolicy 2222.\n")
 	memoryadvisor.RegisterControlKnobHandler(memoryadvisor.ControlKnobKeyMemoryLimitInBytes,
 		memoryadvisor.ControlKnobHandlerWithChecker(handleAdvisorMemoryLimitInBytes))
 	memoryadvisor.RegisterControlKnobHandler(memoryadvisor.ControlKnobKeyCPUSetMems,
@@ -243,6 +248,11 @@ func (p *DynamicPolicy) Start() (err error) {
 	if p.enableSettingMemoryMigrate {
 		general.Infof("setMemoryMigrate enabled")
 		go wait.Until(p.setMemoryMigrate, setMemoryMigratePeriod, p.stopCh)
+	}
+
+	if p.enableSettingSockMemLimit {
+		general.Infof("setSockMemLimit enabled")
+		go wait.Until(p.setSockMemLimit, setMemoryMigratePeriod, p.stopCh)
 	}
 
 	periodicalhandler.ReadyToStartHandlersByGroup(qrm.QRMMemoryPluginPeriodicalHandlerGroupName)

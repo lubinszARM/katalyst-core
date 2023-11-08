@@ -52,6 +52,7 @@ func setExtraControlKnobByConfigForAllocationInfo(allocationInfo *state.Allocati
 	// it shouldn't be configured in extraControlKnobConfigs
 	legacyControlKnobNames := sets.NewString(string(v1.ResourceMemory))
 
+	fmt.Printf("BBLU legacyControlKnobNames :%v...\n", legacyControlKnobNames)
 	for _, legacyControlKnobName := range legacyControlKnobNames.List() {
 		if _, found := extraControlKnobConfigs[legacyControlKnobName]; found {
 			general.Errorf("legacy control knob name: %s is configured", legacyControlKnobName)
@@ -64,8 +65,9 @@ func setExtraControlKnobByConfigForAllocationInfo(allocationInfo *state.Allocati
 	}
 
 	for controlKnobName, configEntry := range extraControlKnobConfigs {
-
+		fmt.Printf("BBLU controlKnobName :%v..\n", controlKnobName)
 		if _, found := allocationInfo.ExtraControlKnobInfo[controlKnobName]; found {
+			fmt.Printf("BBLU continue..\n")
 			continue
 		}
 
@@ -77,7 +79,7 @@ func setExtraControlKnobByConfigForAllocationInfo(allocationInfo *state.Allocati
 		} else if qosLevelDefaultValue, ok := configEntry.QoSLevelToDefaultValue[allocationInfo.QoSLevel]; ok {
 			clonedControlKnobInfo.ControlKnobValue = qosLevelDefaultValue
 		}
-
+		fmt.Printf("BBLU set OK. clone=%v...\n", clonedControlKnobInfo)
 		general.Infof("set extral control knob: %s by configs: %#v  for pod: %s/%s, container: %s",
 			controlKnobName, clonedControlKnobInfo,
 			allocationInfo.PodNamespace, allocationInfo.PodName,
@@ -97,7 +99,7 @@ func (p *DynamicPolicy) setExtraControlKnobByConfigs() {
 		general.Errorf("empty extraControlKnobConfigs, skip setExtraControlKnobByConfigs")
 		return
 	}
-
+	fmt.Printf("BBLU extConfig:%v...\n", p.extraControlKnobConfigs)
 	podList, err := p.metaServer.GetPodList(context.Background(), nil)
 	if err != nil {
 		general.Errorf("get pod list failed, err: %v", err)
@@ -126,7 +128,7 @@ func (p *DynamicPolicy) setExtraControlKnobByConfigs() {
 				general.Warningf("no entry for pod: %s/%s, container: %s", pod.Namespace, pod.Name, containerName)
 				continue
 			}
-
+			fmt.Printf("BBLU setExtraControlKnobByConfigForAllocationInfo pod: %s, container: %s...\n", pod.Name, containerName)
 			setExtraControlKnobByConfigForAllocationInfo(allocationInfo, p.extraControlKnobConfigs, pod)
 		}
 	}
@@ -401,6 +403,10 @@ func (p *DynamicPolicy) clearResidualState() {
 			general.ErrorS(err, "adjustAllocationEntries failed")
 		}
 	}
+}
+
+func (p *DynamicPolicy) setSockMemLimit() {
+	fmt.Printf("BBLU setSockMemLimit...........\n")
 }
 
 // setMemoryMigrate is used to calculate and set memory migrate configuration, notice that
