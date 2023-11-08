@@ -97,7 +97,7 @@ func (p *DynamicPolicy) setExtraControlKnobByConfigs() {
 		general.Errorf("empty extraControlKnobConfigs, skip setExtraControlKnobByConfigs")
 		return
 	}
-
+	fmt.Printf("BBLU extConfig:%v...\n", p.extraControlKnobConfigs)
 	podList, err := p.metaServer.GetPodList(context.Background(), nil)
 	if err != nil {
 		general.Errorf("get pod list failed, err: %v", err)
@@ -126,7 +126,7 @@ func (p *DynamicPolicy) setExtraControlKnobByConfigs() {
 				general.Warningf("no entry for pod: %s/%s, container: %s", pod.Namespace, pod.Name, containerName)
 				continue
 			}
-
+			fmt.Printf("BBLU setExtraControlKnobByConfigForAllocationInfo ...........\n")
 			setExtraControlKnobByConfigForAllocationInfo(allocationInfo, p.extraControlKnobConfigs, pod)
 		}
 	}
