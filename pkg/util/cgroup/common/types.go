@@ -56,8 +56,9 @@ const (
 
 // MemoryData set cgroup memory data
 type MemoryData struct {
-	LimitInBytes int64
-	WmarkRatio   int32
+	LimitInBytes    int64
+	TCPLimitInBytes int64 // tcpmem is accounted separately in cg1
+	WmarkRatio      int32
 }
 
 // CPUData set cgroup cpu data
