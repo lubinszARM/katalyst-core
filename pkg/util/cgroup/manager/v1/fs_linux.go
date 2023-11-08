@@ -44,11 +44,20 @@ func NewManager() *manager {
 }
 
 func (m *manager) ApplyMemory(absCgroupPath string, data *common.MemoryData) error {
+	fmt.Printf("BBLU ApplyMemory :%v...\n", absCgroupPath)
 	if data.LimitInBytes > 0 {
 		if err, applied, oldData := common.WriteFileIfChange(absCgroupPath, "memory.limit_in_bytes", strconv.FormatInt(data.LimitInBytes, 10)); err != nil {
 			return err
 		} else if applied {
 			klog.Infof("[CgroupV1] apply memory limit_in_bytes successfully, cgroupPath: %s, data: %v, old data: %v\n", absCgroupPath, data.LimitInBytes, oldData)
+		}
+	}
+
+	if data.TCPLimitInBytes > 0 {
+		if err, applied, oldData := common.WriteFileIfChange(absCgroupPath, "memory.kmem.tcp.limit_in_bytes", strconv.FormatInt(data.TCPLimitInBytes, 10)); err != nil {
+			return err
+		} else if applied {
+			klog.Infof("[CgroupV1] apply memory memory.kmem.tcp.limit_in_bytes successfully, cgroupPath: %s, data: %v, old data: %v\n", absCgroupPath, data.TCPLimitInBytes, oldData)
 		}
 	}
 
