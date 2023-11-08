@@ -32,7 +32,7 @@ func ApplyMemoryWithRelativePath(relCgroupPath string, data *common.MemoryData) 
 	if data == nil {
 		return fmt.Errorf("ApplyMemoryWithRelativePath with nil cgroup data")
 	}
-
+	fmt.Printf("BBLU ApplyMemoryWithRelativePath:%v..\n", relCgroupPath)
 	absCgroupPath := common.GetAbsCgroupPath("memory", relCgroupPath)
 	return GetManager().ApplyMemory(absCgroupPath, data)
 }
