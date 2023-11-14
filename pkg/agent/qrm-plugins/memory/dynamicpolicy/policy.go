@@ -36,6 +36,7 @@ import (
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/advisorsvc"
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/commonstate"
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/memory/dynamicpolicy/memoryadvisor"
+	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/memory/dynamicpolicy/sockmem"
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/memory/dynamicpolicy/state"
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/util"
 	"github.com/kubewharf/katalyst-core/pkg/agent/utilcomponent/periodicalhandler"
@@ -123,6 +124,7 @@ type DynamicPolicy struct {
 	asyncWorkers *asyncworker.AsyncWorkers
 
 	enableSettingMemoryMigrate bool
+	enableSettingSockMem       bool
 	enableMemoryAdvisor        bool
 	memoryAdvisorSocketAbsPath string
 	memoryPluginSocketAbsPath  string
@@ -177,6 +179,7 @@ func NewDynamicPolicy(agentCtx *agent.GenericContext, conf *config.Configuration
 		podDebugAnnoKeys:           conf.PodDebugAnnoKeys,
 		asyncWorkers:               asyncworker.NewAsyncWorkers(memoryPluginAsyncWorkersName),
 		enableSettingMemoryMigrate: conf.EnableSettingMemoryMigrate,
+		enableSettingSockMem:       conf.EnableSettingSockMem,
 		enableMemoryAdvisor:        conf.EnableMemoryAdvisor,
 		memoryAdvisorSocketAbsPath: conf.MemoryAdvisorSocketAbsPath,
 		memoryPluginSocketAbsPath:  conf.MemoryPluginSocketAbsPath,
@@ -208,6 +211,7 @@ func NewDynamicPolicy(agentCtx *agent.GenericContext, conf *config.Configuration
 	memoryadvisor.RegisterControlKnobHandler(memoryadvisor.ControlKnobKeyDropCache,
 		memoryadvisor.ControlKnobHandlerWithChecker(policyImplement.handleAdvisorDropCache))
 
+	sockmem.UpdateHostTCPMemRatio(conf.SetHostTCPMemLimitRatio)
 	return true, &agent.PluginWrapper{GenericPlugin: pluginWrapper}, nil
 }
 
@@ -243,6 +247,10 @@ func (p *DynamicPolicy) Start() (err error) {
 	if p.enableSettingMemoryMigrate {
 		general.Infof("setMemoryMigrate enabled")
 		go wait.Until(p.setMemoryMigrate, setMemoryMigratePeriod, p.stopCh)
+	}
+
+	if p.enableSettingSockMem {
+		general.Infof("setSockMem enabled")
 	}
 
 	periodicalhandler.ReadyToStartHandlersByGroup(qrm.QRMMemoryPluginPeriodicalHandlerGroupName)
