@@ -481,3 +481,7 @@ func (p *DynamicPolicy) setMemoryMigrate() {
 	}
 	p.migrateMemoryLock.Unlock()
 }
+
+func (p *DynamicPolicy) setSockMemLimit() {
+	fmt.Printf("BBLU setSockMemLimit...........\n")
+}
