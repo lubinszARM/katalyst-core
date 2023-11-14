@@ -127,6 +127,8 @@ const (
 	MetricMemCacheContainer     = "mem.cache.container"
 	MetricMemShmemContainer     = "mem.shmem.container"
 
+	MetricMemTCPLimitContainer = "mem.tcp.limit.container"
+
 	MetricMemDirtyContainer       = "mem.dirty.container"
 	MetricMemWritebackContainer   = "mem.writeback.container"
 	MetricMemPgfaultContainer     = "mem.pgfault.container"
