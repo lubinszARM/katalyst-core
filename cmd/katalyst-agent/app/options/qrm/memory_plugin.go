@@ -29,6 +29,16 @@ type MemoryOptions struct {
 	EnableSettingMemoryMigrate bool
 	EnableMemoryAdvisor        bool
 	ExtraControlKnobConfigFile string
+
+	SockMemOptions
+}
+
+type SockMemOptions struct {
+	EnableSettingSockMem bool
+	// SetHostTCPMemLimit limit host max tcp memory usage.
+	SetHostTCPMemLimitRatio int
+	// SetCgroupTCPMemLimitRatio limit cgroup max tcp memory usage.
+	SetCgroupTCPMemLimitRatio int
 }
 
 func NewMemoryOptions() *MemoryOptions {
@@ -38,6 +48,11 @@ func NewMemoryOptions() *MemoryOptions {
 		SkipMemoryStateCorruption:  false,
 		EnableSettingMemoryMigrate: false,
 		EnableMemoryAdvisor:        false,
+		SockMemOptions: SockMemOptions{
+			EnableSettingSockMem:      false,
+			SetHostTCPMemLimitRatio:   20,
+			SetCgroupTCPMemLimitRatio: 100,
+		},
 	}
 }
 
@@ -56,7 +71,14 @@ func (o *MemoryOptions) AddFlags(fss *cliflag.NamedFlagSets) {
 		o.EnableMemoryAdvisor, "Whether memory resource plugin should enable sys-advisor")
 	fs.StringVar(&o.ExtraControlKnobConfigFile, "memory-extra-control-knob-config-file",
 		o.ExtraControlKnobConfigFile, "the absolute path of extra control knob config file")
+	fs.BoolVar(&o.EnableSettingSockMem, "enable-setting-sockmem",
+		o.EnableSettingSockMem, "if set true, we will limit tcpmem usage in cgroup and host level")
+	fs.IntVar(&o.SetHostTCPMemLimitRatio, "qrm-memory-host-tcpmem-limit-ratio",
+		o.SetHostTCPMemLimitRatio, "limit host max tcp memory usage")
+	fs.IntVar(&o.SetCgroupTCPMemLimitRatio, "qrm-memory-cgroup-tcpmem-limit-ratio",
+		o.SetCgroupTCPMemLimitRatio, "limit cgroup max tcp memory usage")
 }
+
 func (o *MemoryOptions) ApplyTo(conf *qrmconfig.MemoryQRMPluginConfig) error {
 	conf.PolicyName = o.PolicyName
 	conf.ReservedMemoryGB = o.ReservedMemoryGB
@@ -64,5 +86,8 @@ func (o *MemoryOptions) ApplyTo(conf *qrmconfig.MemoryQRMPluginConfig) error {
 	conf.EnableSettingMemoryMigrate = o.EnableSettingMemoryMigrate
 	conf.EnableMemoryAdvisor = o.EnableMemoryAdvisor
 	conf.ExtraControlKnobConfigFile = o.ExtraControlKnobConfigFile
+	conf.EnableSettingSockMem = o.EnableSettingSockMem
+	conf.SetHostTCPMemLimitRatio = o.SetHostTCPMemLimitRatio
+	conf.SetCgroupTCPMemLimitRatio = o.SetCgroupTCPMemLimitRatio
 	return nil
 }
