@@ -27,13 +27,18 @@ import (
 	"github.com/kubewharf/katalyst-api/pkg/consts"
 	apiconsts "github.com/kubewharf/katalyst-api/pkg/consts"
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/commonstate"
+	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/memory/dynamicpolicy/sockmem"
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/memory/dynamicpolicy/state"
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/util"
+	coreconsts "github.com/kubewharf/katalyst-core/pkg/consts"
+	"github.com/kubewharf/katalyst-core/pkg/metaserver/agent/metric/helper"
 	"github.com/kubewharf/katalyst-core/pkg/metrics"
 	"github.com/kubewharf/katalyst-core/pkg/util/cgroup/common"
+	cgroupcommon "github.com/kubewharf/katalyst-core/pkg/util/cgroup/common"
 	cgroupmgr "github.com/kubewharf/katalyst-core/pkg/util/cgroup/manager"
 	"github.com/kubewharf/katalyst-core/pkg/util/general"
 	"github.com/kubewharf/katalyst-core/pkg/util/machine"
+	"github.com/kubewharf/katalyst-core/pkg/util/native"
 )
 
 // setExtraControlKnobByConfigForAllocationInfo sets control knob entry for container,
@@ -480,4 +485,128 @@ func (p *DynamicPolicy) setMemoryMigrate() {
 		}
 	}
 	p.migrateMemoryLock.Unlock()
+}
+
+/*
+ * setSockMemLimit is the unified solution for tcpmem limitation.
+ * it includes 3 parts:
+ * 1, set the limit value for host net.ipv4.tcp_mem.
+ * 2, do nothing for cgroupv2.
+ * 3, set pod tcp_mem accounting for cgroupv1.
+ */
+func (p *DynamicPolicy) setSockMemLimit() {
+	general.Infof("called")
+	/*
+	 * Step1, set the [limit] value for host net.ipv4.tcp_mem.
+	 *
+	 * Description of net.ipv4.tcp_mem:
+	 * It includes 3 parts: min, pressure, limit.
+	 * The format is like the following:
+	 * net.ipv4.tcp_mem = [min] [pressure] [limit]
+	 *
+	 * Each parts means:
+	 * [min]: represents the minimum number of pages allowed in the queue.
+	 * [pressure]: represents the threshold at which the system considers memory
+	 *   to be under pressure due to TCP socket usage. When the memory usage reaches
+	 *   this value, the system may start taking actions like cleaning up or reclaiming memory.
+	 * [limit]: indicates the maximum number of pages allowed in the queue.
+	 */
+	sockmem.SetHostTCPMem(p.state.GetMachineInfo())
+
+	// Step2, do nothing for cg2.
+	if common.CheckCgroup2UnifiedMode() {
+		general.Infof("skip setSockMemLimit in cg2 env")
+		return
+	}
+
+	// Step3, set tcp_mem accounting for pods under cgroupv1.
+	if p.metaServer == nil {
+		general.Errorf("nil metaServer")
+		return
+	}
+	podList, err := p.metaServer.GetPodList(context.Background(), nil)
+	if err != nil {
+		general.Errorf("get pod list failed, err: %v", err)
+		return
+	}
+
+	p.Lock()
+	defer p.Unlock()
+
+	//	podResourceEntries := p.state.GetPodResourceEntries()
+	//	podEntries := podResourceEntries[v1.ResourceMemory]
+
+	for _, pod := range podList {
+		if pod == nil {
+			general.Errorf("get nil pod from metaServer")
+			continue
+		}
+		for _, containerStatus := range pod.Status.ContainerStatuses {
+			podUID, containerID := string(pod.UID), native.TrimContainerIDPrefix(containerStatus.ContainerID)
+			//              enableCg1SockmemStat(podUID, containerID)
+			podLimit, found := helper.GetPodMetric(p.metaServer.MetricsFetcher, p.emitter, pod, coreconsts.MetricMemLimitContainer, -1)
+			if !found {
+				fmt.Printf("BBLU memory limit not found:%v..\n", podLimit)
+				continue
+			}
+
+			fmt.Printf("BBLU memory limit :%d..\n", podLimit)
+			podTCP, found := helper.GetPodMetric(p.metaServer.MetricsFetcher, p.emitter, pod, coreconsts.MetricMemTCPLimitContainer, -1)
+			if !found {
+				fmt.Printf("BBLU memory tcp.limit not found:%v..\n", podTCP)
+				continue
+			}
+
+			fmt.Printf("BBLU memory tcp.limit :%d..\n", podTCP)
+
+			cgroupPath, err := common.GetContainerRelativeCgroupPath(podUID, containerID)
+			if err != nil {
+				return
+			}
+			fmt.Printf("BBLU cgroupPath:%v...\n", cgroupPath)
+			_ = cgroupmgr.ApplyMemoryWithRelativePath(cgroupPath, &cgroupcommon.MemoryData{
+				TCPMemLimitInBytes: 107374182400,
+			})
+		}
+	}
+	/*
+		for _, pod := range podList {
+			if pod == nil {
+				general.Errorf("get nil pod from metaServer")
+				continue
+			}
+
+			podUID := string(pod.UID)
+
+			for _, container := range pod.Spec.Containers {
+				containerName := container.Name
+				allocationInfo := podEntries[podUID][containerName]
+
+				if allocationInfo == nil {
+					general.Warningf("BBLU no entry for pod: %s/%s, container: %s", pod.Namespace, pod.Name, containerName)
+					continue
+				}
+				fmt.Printf("BBLU pod: %s/%s, container: %s\n", pod.Namespace, pod.Name, containerName)
+				podLimit, found := helper.GetPodMetric(p.metaServer.MetricsFetcher, p.emitter, pod, coreconsts.MetricMemLimitContainer, -1)
+				if !found {
+					fmt.Printf("BBLU memory limit not found:%v..\n", podLimit)
+					continue
+				}
+
+				fmt.Printf("BBLU memory limit :%d..\n", podLimit)
+				podTCP, found := helper.GetPodMetric(p.metaServer.MetricsFetcher, p.emitter, pod, coreconsts.MetricMemTCPLimitContainer, -1)
+				if !found {
+					fmt.Printf("BBLU memory tcp.limit not found:%v..\n", podTCP)
+					continue
+				}
+
+				fmt.Printf("BBLU memory tcp.limit :%d..\n", podTCP)
+				_ = cgroupmgr.ApplyMemoryWithRelativePath(calculationInfo.CgroupPath, &cgroupcommon.MemoryData{
+					TCPMemLimitInBytes: 107374182400,
+				})
+
+				//		setExtraControlKnobByConfigForAllocationInfo(allocationInfo, p.extraControlKnobConfigs, pod)
+			}
+		}
+	*/
 }
