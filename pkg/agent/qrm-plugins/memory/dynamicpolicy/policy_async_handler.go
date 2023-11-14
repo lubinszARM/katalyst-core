@@ -27,6 +27,7 @@ import (
 	"github.com/kubewharf/katalyst-api/pkg/consts"
 	apiconsts "github.com/kubewharf/katalyst-api/pkg/consts"
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/commonstate"
+	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/memory/dynamicpolicy/sockmem"
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/memory/dynamicpolicy/state"
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/util"
 	"github.com/kubewharf/katalyst-core/pkg/metrics"
@@ -480,4 +481,33 @@ func (p *DynamicPolicy) setMemoryMigrate() {
 		}
 	}
 	p.migrateMemoryLock.Unlock()
+}
+
+func (p *DynamicPolicy) setSockMemLimit() {
+	fmt.Printf("BBLU setSockMemLimit...........\n")
+	general.Infof("called")
+	/* Unified solution for TCP memory.
+	 * 1, modify the limit value for host net.ipv4.tcp_mem.
+	 * 2, do nothing for cg2.
+	 * 3, set pod tcp_mem accounting for cg1.
+	 */
+	/*
+	 * Step1, modify the limit value for host net.ipv4.tcp_mem.
+	 *
+	 * net.ipv4.tcp_mem = [min] [pressure] [limit]
+	 * min: Represents the minimum number of pages allowed in the queue.
+	 * pressure: Represents the threshold at which the system considers memory
+	 *   to be under pressure due to TCP socket usage. When the memory usage reaches
+	 *   this value, the system may start taking actions like cleaning up or reclaiming memory.
+	 * limit: Indicates the maximum number of pages allowed in the queue.
+	 */
+	sockmem.SetHostTCPMem(20, p.state.GetMachineInfo())
+
+	// Step2, do nothing for cg2.
+	if common.CheckCgroup2UnifiedMode() {
+		general.Infof("skip Set_Cgroup_MemLimit in cg2 env")
+		return
+	}
+
+	// Step3, set tcp_mem accounting for pods under cgroupv1.
 }
