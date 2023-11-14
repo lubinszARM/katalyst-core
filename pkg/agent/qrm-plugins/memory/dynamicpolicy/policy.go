@@ -67,6 +67,7 @@ const (
 	stateCheckPeriod           = 30 * time.Second
 	maxResidualTime            = 5 * time.Minute
 	setMemoryMigratePeriod     = 5 * time.Second
+	setSockMemLimitPeriod      = 1 * time.Minute
 	applyCgroupPeriod          = 5 * time.Second
 	setExtraControlKnobsPeriod = 5 * time.Second
 )
@@ -123,6 +124,9 @@ type DynamicPolicy struct {
 	asyncWorkers *asyncworker.AsyncWorkers
 
 	enableSettingMemoryMigrate bool
+
+	enableSettingSockMemLimit bool
+
 	enableMemoryAdvisor        bool
 	memoryAdvisorSocketAbsPath string
 	memoryPluginSocketAbsPath  string
@@ -177,6 +181,7 @@ func NewDynamicPolicy(agentCtx *agent.GenericContext, conf *config.Configuration
 		podDebugAnnoKeys:           conf.PodDebugAnnoKeys,
 		asyncWorkers:               asyncworker.NewAsyncWorkers(memoryPluginAsyncWorkersName),
 		enableSettingMemoryMigrate: conf.EnableSettingMemoryMigrate,
+		enableSettingSockMemLimit:  conf.EnableSettingSockMemLimit,
 		enableMemoryAdvisor:        conf.EnableMemoryAdvisor,
 		memoryAdvisorSocketAbsPath: conf.MemoryAdvisorSocketAbsPath,
 		memoryPluginSocketAbsPath:  conf.MemoryPluginSocketAbsPath,
@@ -246,6 +251,11 @@ func (p *DynamicPolicy) Start() (err error) {
 	}
 
 	periodicalhandler.ReadyToStartHandlersByGroup(qrm.QRMMemoryPluginPeriodicalHandlerGroupName)
+
+	if p.enableSettingSockMemLimit {
+		general.Infof("setSockMemLimit enabled")
+		go wait.Until(p.setSockMemLimit, setSockMemLimitPeriod, p.stopCh)
+	}
 
 	if !p.enableMemoryAdvisor {
 		general.Infof("start dynamic policy memory plugin without memory advisor")

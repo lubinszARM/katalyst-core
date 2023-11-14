@@ -49,6 +49,7 @@ type GenericAgentConfiguration struct {
 	*global.PluginManagerConfiguration
 	*global.MetaServerConfiguration
 	*global.QRMAdvisorConfiguration
+	*global.QRMSockMemConfiguration
 
 	*eviction.GenericEvictionConfiguration
 	*reporter.GenericReporterConfiguration

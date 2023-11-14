@@ -41,6 +41,7 @@ type Options struct {
 	*global.PluginManagerOptions
 	*global.MetaServerOptions
 	*global.QRMAdvisorOptions
+	*global.QRMSockMemOptions
 
 	// the below are options used by all each individual katalyst module/plugin
 	genericEvictionOptions *eviction.GenericEvictionOptions
@@ -65,6 +66,7 @@ func NewOptions() *Options {
 		MetaServerOptions:    global.NewMetaServerOptions(),
 		PluginManagerOptions: global.NewPluginManagerOptions(),
 		QRMAdvisorOptions:    global.NewQRMAdvisorOptions(),
+		QRMSockMemOptions:    global.NewQRMSockMemOptions(),
 
 		genericEvictionOptions:   eviction.NewGenericEvictionOptions(),
 		evictionOptions:          eviction.NewEvictionOptions(),
@@ -85,6 +87,7 @@ func (o *Options) AddFlags(fss *cliflag.NamedFlagSets) {
 	o.PluginManagerOptions.AddFlags(fss)
 	o.BaseOptions.AddFlags(fss)
 	o.QRMAdvisorOptions.AddFlags(fss)
+	o.QRMSockMemOptions.AddFlags(fss)
 	o.genericEvictionOptions.AddFlags(fss)
 	o.evictionOptions.AddFlags(fss)
 	o.genericReporterOptions.AddFlags(fss)
@@ -105,6 +108,7 @@ func (o *Options) ApplyTo(c *config.Configuration) error {
 	errList = append(errList, o.PluginManagerOptions.ApplyTo(c.PluginManagerConfiguration))
 	errList = append(errList, o.MetaServerOptions.ApplyTo(c.MetaServerConfiguration))
 	errList = append(errList, o.QRMAdvisorOptions.ApplyTo(c.QRMAdvisorConfiguration))
+	errList = append(errList, o.QRMSockMemOptions.ApplyTo(c.QRMSockMemConfiguration))
 	errList = append(errList, o.genericEvictionOptions.ApplyTo(c.GenericEvictionConfiguration))
 	errList = append(errList, o.evictionOptions.ApplyTo(c.EvictionConfiguration))
 	errList = append(errList, o.genericReporterOptions.ApplyTo(c.GenericReporterConfiguration))
