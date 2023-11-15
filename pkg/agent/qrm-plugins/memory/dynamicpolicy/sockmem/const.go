@@ -21,4 +21,13 @@ const (
 	hostTCPMemRatioMin = 20 // min ratio for host tcp mem: 20%
 	hostTCPMemRatioMax = 80 // max ratio for host tcp mem: 80%
 	hostTCPMemFile     = "/proc/sys/net/ipv4/tcp_mem"
+
+	// Constants for cgroupv1 sock memory statistics
+	kernSockMemOff     = 9223372036854771712 // max value
+	kernSockMemEnabled = 9223372036854767616
+
+	// Constants for cgroupv1 sock memory ratio
+	cgroupTCPMemMin2G    = 2147483648 // static min value for pod's sockmem: 2G
+	cgroupTCPMemRatioMin = 20         // min ratio for pod's sockmem: 20%
+	cgroupTCPMemRatioMax = 200        // max ratio for pod's sockmem: 200%
 )

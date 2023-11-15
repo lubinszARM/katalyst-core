@@ -28,7 +28,10 @@ import (
 
 	info "github.com/google/cadvisor/info/v1"
 	"golang.org/x/sys/unix"
-	"k8s.io/klog/v2"
+
+	cgroupcm "github.com/kubewharf/katalyst-core/pkg/util/cgroup/common"
+	cgroupmgr "github.com/kubewharf/katalyst-core/pkg/util/cgroup/manager"
+	"github.com/kubewharf/katalyst-core/pkg/util/general"
 )
 
 type SockMemConfig struct {
@@ -50,8 +53,17 @@ func UpdateHostTCPMemRatio(ratio int) {
 	sockMemConfig.hostTCPMemRatio = ratio
 }
 
-func alignToPageSize(number int) int {
-	pageSize := int(syscall.Getpagesize())
+func UpdateCgroupTCPMemRatio(ratio int) {
+	if ratio < cgroupTCPMemRatioMin {
+		ratio = cgroupTCPMemRatioMin
+	} else if ratio > cgroupTCPMemRatioMax {
+		ratio = cgroupTCPMemRatioMax
+	}
+	sockMemConfig.cgroupTCPMemRatio = ratio
+}
+
+func alignToPageSize(number int64) int64 {
+	pageSize := int64(syscall.Getpagesize())
 	alignedNumber := (number + pageSize - 1) &^ (pageSize - 1)
 	return alignedNumber
 }
@@ -109,12 +121,37 @@ func SetHostTCPMem(machineInfo *info.MachineInfo) {
 
 	pageSize := uint64(unix.Getpagesize())
 	memTotal := machineInfo.MemoryCapacity
-
 	newUpperLimit := memTotal / pageSize / 100 * uint64(tcpMemRatio)
-
 	if (newUpperLimit != tcpMem[2]) && (newUpperLimit > tcpMem[1]) {
-		klog.Infof("write to host tcp_mem, newLimit=%d, oldLimit=%d", newUpperLimit, tcpMem[2])
+		general.Infof("write to host tcp_mem, newLimit=%d, oldLimit=%d", newUpperLimit, tcpMem[2])
 		tcpMem[2] = newUpperLimit
 		setHostTCPMemFile(hostTCPMemFile, tcpMem)
+	}
+}
+
+func SetCg1TCPMem(podUID, containerID string, memLimit, memTCPLimit int64) {
+	newMemTCPLimit := memLimit / 100 * int64(sockMemConfig.cgroupTCPMemRatio)
+	if newMemTCPLimit < cgroupTCPMemMin2G {
+		newMemTCPLimit = cgroupTCPMemMin2G
+	}
+
+	cgroupPath, err := cgroupcm.GetContainerRelativeCgroupPath(podUID, containerID)
+	if err != nil {
+		return
+	}
+
+	newMemTCPLimit = alignToPageSize(newMemTCPLimit)
+	if newMemTCPLimit >= kernSockMemOff {
+		newMemTCPLimit = kernSockMemEnabled
+	}
+	if memLimit == kernSockMemOff {
+		fmt.Printf("BBLU set:cg=%v, %d, %d, %d...\n", cgroupPath, memLimit, memTCPLimit, newMemTCPLimit)
+	}
+
+	if newMemTCPLimit != memTCPLimit {
+		_ = cgroupmgr.ApplyMemoryWithRelativePath(cgroupPath, &cgroupcm.MemoryData{
+			TCPMemLimitInBytes: int64(newMemTCPLimit),
+		})
+		general.Infof("Apply TCPMemLimitInBytes: %v, old value=%d, new value=%d", cgroupPath, memTCPLimit, newMemTCPLimit)
 	}
 }
