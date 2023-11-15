@@ -20,23 +20,32 @@ limitations under the License.
 package sockmem
 
 import (
+	"context"
 	"fmt"
+
+	"golang.org/x/sys/unix"
 
 	coreconfig "github.com/kubewharf/katalyst-core/pkg/config"
 	dynamicconfig "github.com/kubewharf/katalyst-core/pkg/config/agent/dynamic"
+	coreconsts "github.com/kubewharf/katalyst-core/pkg/consts"
 	"github.com/kubewharf/katalyst-core/pkg/metaserver"
+	"github.com/kubewharf/katalyst-core/pkg/metaserver/agent/metric/helper"
 	"github.com/kubewharf/katalyst-core/pkg/metrics"
 	"github.com/kubewharf/katalyst-core/pkg/util/cgroup/common"
+	cgroupcm "github.com/kubewharf/katalyst-core/pkg/util/cgroup/common"
+	cgroupmgr "github.com/kubewharf/katalyst-core/pkg/util/cgroup/manager"
 	"github.com/kubewharf/katalyst-core/pkg/util/general"
-	"golang.org/x/sys/unix"
+	"github.com/kubewharf/katalyst-core/pkg/util/native"
 )
 
 type SockMemConfig struct {
 	globalTCPMemRatio int
+	cgroupTCPMemRatio int
 }
 
 var sockMemConfig = SockMemConfig{
-	globalTCPMemRatio: 20, // default: 20% * {host total memory}
+	globalTCPMemRatio: 20,  // default: 20% * {host total memory}
+	cgroupTCPMemRatio: 100, // default: 100% * {cgroup memory limit}
 }
 
 func updateGlobalTCPMemRatio(ratio int) {
@@ -46,6 +55,15 @@ func updateGlobalTCPMemRatio(ratio int) {
 		ratio = globalTCPMemRatioMax
 	}
 	sockMemConfig.globalTCPMemRatio = ratio
+}
+
+func updateCgroupTCPMemRatio(ratio int) {
+	if ratio < cgroupTCPMemRatioMin {
+		ratio = cgroupTCPMemRatioMin
+	} else if ratio > cgroupTCPMemRatioMax {
+		ratio = cgroupTCPMemRatioMax
+	}
+	sockMemConfig.cgroupTCPMemRatio = ratio
 }
 
 func setHostTCPMem(memTotal uint64) error {
@@ -66,6 +84,31 @@ func setHostTCPMem(memTotal uint64) error {
 	return nil
 }
 
+func setCg1TCPMem(podUID, containerID string, memLimit, memTCPLimit int64) error {
+	newMemTCPLimit := memLimit / 100 * int64(sockMemConfig.cgroupTCPMemRatio)
+	fmt.Printf("BBLU algin:%d..\n", newMemTCPLimit)
+	newMemTCPLimit = alignToPageSize(newMemTCPLimit)
+	fmt.Printf("BBLU setCg1TCPMem333:%d, %d, %d.\n", memLimit, memTCPLimit, newMemTCPLimit)
+	if newMemTCPLimit < cgroupTCPMemMin2G {
+		newMemTCPLimit = cgroupTCPMemMin2G
+	} else if newMemTCPLimit >= kernSockMemAccoutingOff {
+		newMemTCPLimit = kernSockMemAccoutingOn
+	}
+
+	cgroupPath, err := cgroupcm.GetContainerRelativeCgroupPath(podUID, containerID)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("BBLU newMemTCPLimit222:%v, ratio=%d, memlimti=%d, old value=%d, new value=%d\n", cgroupPath, int64(sockMemConfig.cgroupTCPMemRatio), memLimit, memTCPLimit, newMemTCPLimit)
+	if newMemTCPLimit != memTCPLimit {
+		_ = cgroupmgr.ApplyMemoryWithRelativePath(cgroupPath, &cgroupcm.MemoryData{
+			TCPMemLimitInBytes: newMemTCPLimit,
+		})
+		general.Infof("Apply TCPMemLimitInBytes: %v, old value=%d, new value=%d", cgroupPath, memTCPLimit, newMemTCPLimit)
+	}
+	return nil
+}
+
 /*
  * SetSockMemLimit is the unified solution for tcpmem limitation.
  * it includes 3 parts:
@@ -75,7 +118,7 @@ func setHostTCPMem(memTotal uint64) error {
  */
 func SetSockMemLimit(conf *coreconfig.Configuration,
 	_ interface{}, _ *dynamicconfig.DynamicAgentConfiguration,
-	_ metrics.MetricEmitter, metaServer *metaserver.MetaServer) {
+	emitter metrics.MetricEmitter, metaServer *metaserver.MetaServer) {
 	general.Infof("called")
 
 	// SettingSockMem featuregate.
@@ -85,10 +128,13 @@ func SetSockMemLimit(conf *coreconfig.Configuration,
 	} else if metaServer == nil {
 		general.Errorf("nil metaServer")
 		return
+	} else if emitter == nil {
+		general.Errorf("nil emitter")
+		return
 	}
 
 	updateGlobalTCPMemRatio(conf.SetGlobalTCPMemRatio)
-
+	updateCgroupTCPMemRatio(conf.SetCgroupTCPMemRatio)
 	/*
 	 * Step1, set the [limit] value for host net.ipv4.tcp_mem.
 	 *
@@ -113,5 +159,33 @@ func SetSockMemLimit(conf *coreconfig.Configuration,
 	}
 
 	// Step3, set tcp_mem accounting for pods under cgroupv1.
-	// to-do
+	podList, err := metaServer.GetPodList(context.Background(), nil)
+	if err != nil {
+		general.Errorf("get pod list failed, err: %v", err)
+		return
+	}
+
+	for _, pod := range podList {
+		if pod == nil {
+			general.Errorf("get nil pod from metaServer")
+			continue
+		}
+		for _, containerStatus := range pod.Status.ContainerStatuses {
+			podUID, containerID := string(pod.UID), native.TrimContainerIDPrefix(containerStatus.ContainerID)
+
+			memLimit, found := helper.GetPodMetric(metaServer.MetricsFetcher, emitter, pod, coreconsts.MetricMemLimitContainer, -1)
+			if !found {
+				general.Infof("memory limit not found:%v..\n", podUID)
+				continue
+			}
+
+			memTCPLimit, found := helper.GetPodMetric(metaServer.MetricsFetcher, emitter, pod, coreconsts.MetricMemTCPLimitContainer, -1)
+			if !found {
+				general.Infof("memory tcp.limit not found:%v..\n", podUID)
+				continue
+			}
+
+			_ = setCg1TCPMem(podUID, containerID, int64(memLimit), int64(memTCPLimit))
+		}
+	}
 }
