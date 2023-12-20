@@ -99,3 +99,22 @@ func GetNumaMetric(metricsFetcher metric.MetricsFetcher, emitter metrics.MetricE
 	}
 	return metricWithTime.Value, err
 }
+
+func GetDiskMetricWithTime(metricsFetcher metric.MetricsFetcher, emitter metrics.MetricEmitter, metricName string, devName string) (metricutil.MetricData, error) {
+	fmt.Printf("BBLU222:%v:%v...\n", devName, metricName)
+	metricData, err := metricsFetcher.GetDeviceMetric(devName, metricName)
+	if err != nil {
+		general.Errorf(errMsgGetSystemMetrics, metricName, devName, err)
+		return metricutil.MetricData{}, err
+	}
+	return metricData, nil
+}
+
+func GetDiskMetric(metricsFetcher metric.MetricsFetcher, emitter metrics.MetricEmitter, metricName string, devName string) (float64, error) {
+	fmt.Printf("BBLU111:%v:%v...\n", devName, metricName)
+	metricWithTime, err := GetDiskMetricWithTime(metricsFetcher, emitter, metricName, devName)
+	if err != nil {
+		return 0, err
+	}
+	return metricWithTime.Value, err
+}

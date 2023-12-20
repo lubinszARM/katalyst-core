@@ -68,6 +68,13 @@ const (
 	ObjectFieldNameStatus = "status"
 )
 
+// common disk types.
+const (
+	DiskTypeUnknown = 0
+	DiskTypeHDD     = 1
+	DiskTypeSSD     = 2
+)
+
 var (
 	EXP1  = 1.0 / math.Exp(5.0/60.0)
 	EXP5  = 1.0 / math.Exp(5.0/300.0)
