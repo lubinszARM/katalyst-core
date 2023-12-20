@@ -152,6 +152,8 @@ func (c *MetricStore) GetNumaMetric(numaID int, metricName string) (MetricData, 
 func (c *MetricStore) GetDeviceMetric(deviceName string, metricName string) (MetricData, error) {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
+	//	fmt.Printf("BBLU devName:%v, metric:%v..\n", deviceName, metricName)
+	//	fmt.Printf("BBLU get device metric:%v..\n", c.deviceMetricMap)
 	if c.deviceMetricMap[deviceName] != nil {
 		if data, ok := c.deviceMetricMap[deviceName][metricName]; ok {
 			return data, nil
