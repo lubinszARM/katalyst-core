@@ -21,11 +21,13 @@ const (
 	metricsNameSystemMetric    = "system_metric_raw"
 	metricsNameContainerMetric = "container_metric_raw"
 	metricsNamePodMetric       = "pod_metric_raw"
+	metricsNameDeviceMetric    = "device_metric_raw"
 
 	metricsTagKeyNumaID        = "numa_id"
 	metricsTagKeyMetricName    = "metric_name"
 	metricsTagKeyPodUID        = "pod_uid"
 	metricsTagKeyContainerName = "container_name"
+	metricsTagKeyDeviceName    = "device_name"
 )
 
 const (
