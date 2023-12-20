@@ -48,6 +48,10 @@ const (
 	metricsNameMalachiteGetPodStatusFailed    = "malachite_get_pod_status_failed"
 
 	pageShift = 12
+
+	DiskTypeUnknown = -1
+	DiskTypeHDD     = 0
+	DiskTypeSSD     = 1
 )
 
 // NewMalachiteMetricsFetcher returns the default implementation of MetricsFetcher.
@@ -480,6 +484,17 @@ func (m *MalachiteMetricsFetcher) processSystemIOData(systemIOData *types.System
 			utilmetric.MetricData{Value: float64(device.IoWrite), Time: &updateTime})
 		m.metricStore.SetDeviceMetric(device.DeviceName, consts.MetricIOBusySystem,
 			utilmetric.MetricData{Value: float64(device.IoBusy), Time: &updateTime})
+
+		diskType := DiskTypeUnknown
+		if device.DiskType == "HDD" {
+			diskType = DiskTypeHDD
+		} else if device.DiskType == "SSD" {
+			diskType = DiskTypeSSD
+		}
+		m.metricStore.SetDeviceMetric(device.DeviceName, consts.MetricIODiskType,
+			utilmetric.MetricData{Value: float64(diskType), Time: &updateTime})
+		m.metricStore.SetDeviceMetric(device.DeviceName, consts.MetricIODiskWBTValue,
+			utilmetric.MetricData{Value: float64(device.WBTValue), Time: &updateTime})
 	}
 }
 
