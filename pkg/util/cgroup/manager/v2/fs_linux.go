@@ -219,6 +219,19 @@ func (m *manager) ApplyIOWeight(absCgroupPath string, devID string, weight uint6
 	return nil
 }
 
+func (m *manager) ApplyIOLatency(absCgroupPath string, devID string, latency uint64) error {
+	dataContent := fmt.Sprintf("%s target=%d", devID, latency)
+
+	if err, applied, oldData := common.WriteFileIfChange(absCgroupPath, "io.latency", dataContent); err != nil {
+		return err
+	} else if applied {
+		klog.Infof("[CgroupV2] apply io.latency for device: %s successfully,"+
+			"cgroupPath: %s, added data: %s, old data: %s\n", devID, absCgroupPath, dataContent, oldData)
+	}
+
+	return nil
+}
+
 func (m *manager) ApplyUnifiedData(absCgroupPath, cgroupFileName, data string) error {
 	if err, applied, oldData := common.WriteFileIfChange(absCgroupPath, cgroupFileName, data); err != nil {
 		return err
