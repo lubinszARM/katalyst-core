@@ -220,7 +220,12 @@ func (m *manager) ApplyIOWeight(absCgroupPath string, devID string, weight uint6
 }
 
 func (m *manager) ApplyIOLatency(absCgroupPath string, devID string, latency uint64) error {
-	dataContent := fmt.Sprintf("%s target=%d", devID, latency)
+	var dataContent string
+	if latency == 0 {
+		dataContent = fmt.Sprintf("%s target=max", devID)
+	} else {
+		dataContent = fmt.Sprintf("%s target=%d", devID, latency)
+	}
 
 	curLatency, found, err := m.GetDeviceIOLatency(absCgroupPath, devID)
 
@@ -228,6 +233,7 @@ func (m *manager) ApplyIOLatency(absCgroupPath string, devID string, latency uin
 		return fmt.Errorf("try GetDeviceIOLatency before ApplyIOLatency failed with error: %v", err)
 	}
 
+	fmt.Printf("BBLU got latency:%v:%v, found=%v..\n", curLatency, latency, found)
 	if found && curLatency == latency {
 		return nil
 	}
@@ -236,7 +242,7 @@ func (m *manager) ApplyIOLatency(absCgroupPath string, devID string, latency uin
 		return err
 	} else if applied {
 		klog.Infof("[CgroupV2] apply io.latency for device: %s successfully,"+
-			"cgroupPath: %s, added data: %s, old data: %s\n", devID, absCgroupPath, dataContent, oldData)
+			"cgroupPath: %s, new data: %s, old data: %s\n", devID, absCgroupPath, dataContent, oldData)
 	}
 
 	return nil
@@ -448,6 +454,7 @@ func (m *manager) GetDeviceIOLatency(absCgroupPath string, devID string) (uint64
 		return 0, false, nil
 	}
 
+	fmt.Printf("BBLU devLatency:%v..\n", devLatency)
 	targetStr := strings.TrimPrefix(devLatency, "target=")
 	latency, err := strconv.ParseUint(targetStr, 10, 64)
 	if err != nil {
