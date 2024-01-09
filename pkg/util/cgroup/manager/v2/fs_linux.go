@@ -228,6 +228,7 @@ func (m *manager) ApplyIOLatency(absCgroupPath string, devID string, latency uin
 		return fmt.Errorf("try GetDeviceIOLatency before ApplyIOLatency failed with error: %v", err)
 	}
 
+	fmt.Prinf("BBLU got latency:%v:%v, found=%v..\n", curLatency, latency, found)
 	if found && curLatency == latency {
 		return nil
 	}
@@ -448,6 +449,7 @@ func (m *manager) GetDeviceIOLatency(absCgroupPath string, devID string) (uint64
 		return 0, false, nil
 	}
 
+	fmt.Printf("BBLU devLatency:%v..\n", devLatency)
 	targetStr := strings.TrimPrefix(devLatency, "target=")
 	latency, err := strconv.ParseUint(targetStr, 10, 64)
 	if err != nil {
