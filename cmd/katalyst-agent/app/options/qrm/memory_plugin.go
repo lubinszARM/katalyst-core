@@ -33,6 +33,7 @@ type MemoryOptions struct {
 	OOMPriorityPinnedMapAbsPath string
 
 	SockMemOptions
+	FragMemOptions
 }
 
 type SockMemOptions struct {
@@ -41,6 +42,15 @@ type SockMemOptions struct {
 	SetGlobalTCPMemRatio int
 	// SetCgroupTCPMemLimitRatio limit cgroup max tcp memory usage.
 	SetCgroupTCPMemRatio int
+}
+
+type FragMemOptions struct {
+	EnableSettingFragMem bool
+	// SetMemFragScoreAsync sets the threashold of frag score for async memory compaction.
+	// The async compaction behavior will be triggered while exceeding this score.
+	SetMemFragScoreAsync int
+	// SetMemFragScoreSync sets the threashold of frag score for sync memory compaction.
+	SetMemFragScoreSync int
 }
 
 func NewMemoryOptions() *MemoryOptions {
@@ -55,6 +65,11 @@ func NewMemoryOptions() *MemoryOptions {
 			EnableSettingSockMem: false,
 			SetGlobalTCPMemRatio: 20,  // default: 20% * {host total memory}
 			SetCgroupTCPMemRatio: 100, // default: 100% * {cgroup memory}
+		},
+		FragMemOptions: FragMemOptions{
+			EnableSettingFragMem: false,
+			SetMemFragScoreAsync: 800,
+			SetMemFragScoreSync:  700,
 		},
 	}
 }
@@ -84,7 +99,14 @@ func (o *MemoryOptions) AddFlags(fss *cliflag.NamedFlagSets) {
 		o.SetGlobalTCPMemRatio, "limit global max tcp memory usage")
 	fs.IntVar(&o.SetCgroupTCPMemRatio, "qrm-memory-cgroup-tcpmem-ratio",
 		o.SetCgroupTCPMemRatio, "limit cgroup max tcp memory usage")
+	fs.BoolVar(&o.EnableSettingFragMem, "enable-setting-mem-compaction",
+		o.EnableSettingFragMem, "if set true, we will enable memory compaction related features")
+	fs.IntVar(&o.SetMemFragScoreAsync, "qrm-memory-frag-score-async",
+		o.SetMemFragScoreAsync, "set the threshold of frag score for async memory compaction")
+	fs.IntVar(&o.SetMemFragScoreSync, "qrm-memory-frag-score-sync",
+		o.SetMemFragScoreSync, "set the threshold of frag score for sync memory compaction")
 }
+
 func (o *MemoryOptions) ApplyTo(conf *qrmconfig.MemoryQRMPluginConfig) error {
 	conf.PolicyName = o.PolicyName
 	conf.ReservedMemoryGB = o.ReservedMemoryGB
@@ -97,5 +119,8 @@ func (o *MemoryOptions) ApplyTo(conf *qrmconfig.MemoryQRMPluginConfig) error {
 	conf.EnableSettingSockMem = o.EnableSettingSockMem
 	conf.SetGlobalTCPMemRatio = o.SetGlobalTCPMemRatio
 	conf.SetCgroupTCPMemRatio = o.SetCgroupTCPMemRatio
+	conf.EnableSettingFragMem = o.EnableSettingFragMem
+	conf.SetMemFragScoreAsync = o.SetMemFragScoreAsync
+	conf.SetMemFragScoreSync = o.SetMemFragScoreSync
 	return nil
 }
