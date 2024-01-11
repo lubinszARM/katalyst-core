@@ -40,6 +40,7 @@ import (
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/memory/dynamicpolicy/memoryadvisor"
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/memory/dynamicpolicy/oom"
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/memory/dynamicpolicy/state"
+	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/memory/handlers/fragmem"
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/memory/handlers/sockmem"
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/util"
 	"github.com/kubewharf/katalyst-core/pkg/agent/utilcomponent/periodicalhandler"
@@ -131,6 +132,7 @@ type DynamicPolicy struct {
 
 	enableSettingMemoryMigrate bool
 	enableSettingSockMem       bool
+	enableSettingFragMem       bool
 	enableMemoryAdvisor        bool
 	memoryAdvisorSocketAbsPath string
 	memoryPluginSocketAbsPath  string
@@ -192,6 +194,7 @@ func NewDynamicPolicy(agentCtx *agent.GenericContext, conf *config.Configuration
 		asyncWorkers:               asyncworker.NewAsyncWorkers(memoryPluginAsyncWorkersName, wrappedEmitter),
 		enableSettingMemoryMigrate: conf.EnableSettingMemoryMigrate,
 		enableSettingSockMem:       conf.EnableSettingSockMem,
+		enableSettingFragMem:       conf.EnableSettingFragMem,
 		enableMemoryAdvisor:        conf.EnableMemoryAdvisor,
 		memoryAdvisorSocketAbsPath: conf.MemoryAdvisorSocketAbsPath,
 		memoryPluginSocketAbsPath:  conf.MemoryPluginSocketAbsPath,
@@ -292,6 +295,15 @@ func (p *DynamicPolicy) Start() (err error) {
 			sockmem.EnableSetSockMemPeriodicalHandlerName, sockmem.SetSockMemLimit, 60*time.Second)
 		if err != nil {
 			general.Infof("setSockMem failed, err=%v", err)
+		}
+	}
+
+	if p.enableSettingFragMem {
+		general.Infof("setFragMem enabled")
+		err := periodicalhandler.RegisterPeriodicalHandler(qrm.QRMMemoryPluginPeriodicalHandlerGroupName,
+			fragmem.EnableSetFragMemPeriodicalHandlerName, fragmem.SetMemCompact, 60*time.Second)
+		if err != nil {
+			general.Infof("setFragMem failed, err=%v", err)
 		}
 	}
 
