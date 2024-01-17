@@ -58,6 +58,7 @@ const (
 type MemoryData struct {
 	LimitInBytes       int64
 	TCPMemLimitInBytes int64
+	SoftLimitInBytes   int64
 	WmarkRatio         int32
 }
 
