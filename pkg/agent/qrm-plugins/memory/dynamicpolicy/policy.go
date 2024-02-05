@@ -39,6 +39,7 @@ import (
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/memory/dynamicpolicy/memoryadvisor"
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/memory/dynamicpolicy/oom"
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/memory/dynamicpolicy/state"
+	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/memory/handlers/memprotection"
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/memory/handlers/sockmem"
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/util"
 	"github.com/kubewharf/katalyst-core/pkg/agent/utilcomponent/periodicalhandler"
@@ -131,6 +132,7 @@ type DynamicPolicy struct {
 	enableSettingMemoryMigrate bool
 	enableSettingSockMem       bool
 	enableMemoryAdvisor        bool
+	enableCgMemProtection      bool
 	memoryAdvisorSocketAbsPath string
 	memoryPluginSocketAbsPath  string
 
@@ -192,6 +194,7 @@ func NewDynamicPolicy(agentCtx *agent.GenericContext, conf *config.Configuration
 		enableSettingMemoryMigrate: conf.EnableSettingMemoryMigrate,
 		enableSettingSockMem:       conf.EnableSettingSockMem,
 		enableMemoryAdvisor:        conf.EnableMemoryAdvisor,
+		enableCgMemProtection:      conf.EnableCgMemProtection,
 		memoryAdvisorSocketAbsPath: conf.MemoryAdvisorSocketAbsPath,
 		memoryPluginSocketAbsPath:  conf.MemoryPluginSocketAbsPath,
 		extraControlKnobConfigs:    extraControlKnobConfigs, // [TODO]: support modifying extraControlKnobConfigs by KCC
@@ -289,6 +292,15 @@ func (p *DynamicPolicy) Start() (err error) {
 		general.Infof("setSockMem enabled")
 		err := periodicalhandler.RegisterPeriodicalHandler(qrm.QRMMemoryPluginPeriodicalHandlerGroupName,
 			sockmem.EnableSetSockMemPeriodicalHandlerName, sockmem.SetSockMemLimit, 60*time.Second)
+		if err != nil {
+			general.Infof("setSockMem failed, err=%v", err)
+		}
+	}
+
+	if p.enableCgMemProtection {
+		general.Infof("setCgMemProtection enabled")
+		err := periodicalhandler.RegisterPeriodicalHandler(qrm.QRMMemoryPluginPeriodicalHandlerGroupName,
+			memprotection.EnableCGMemProtectionPeriodicalHandlerName, memprotection.MemProtectionTaskFunc, 60*time.Second)
 		if err != nil {
 			general.Infof("setSockMem failed, err=%v", err)
 		}
