@@ -33,6 +33,7 @@ type MemoryOptions struct {
 	OOMPriorityPinnedMapAbsPath string
 
 	SockMemOptions
+	CgMemProtectionOptions
 }
 
 type SockMemOptions struct {
@@ -41,6 +42,12 @@ type SockMemOptions struct {
 	SetGlobalTCPMemRatio int
 	// SetCgroupTCPMemLimitRatio limit cgroup max tcp memory usage.
 	SetCgroupTCPMemRatio int
+}
+
+type CgMemProtectionOptions struct {
+	EnableCgMemProtection                bool
+	CgMemProtectionK8sLevelConfigFile    string
+	CgMemProtectionCgroupLevelConfigFile string
 }
 
 func NewMemoryOptions() *MemoryOptions {
@@ -55,6 +62,11 @@ func NewMemoryOptions() *MemoryOptions {
 			EnableSettingSockMem: false,
 			SetGlobalTCPMemRatio: 20,  // default: 20% * {host total memory}
 			SetCgroupTCPMemRatio: 100, // default: 100% * {cgroup memory}
+		},
+		CgMemProtectionOptions: CgMemProtectionOptions{
+			EnableCgMemProtection:                false,
+			CgMemProtectionK8sLevelConfigFile:    "",
+			CgMemProtectionCgroupLevelConfigFile: "",
 		},
 	}
 }
@@ -84,7 +96,14 @@ func (o *MemoryOptions) AddFlags(fss *cliflag.NamedFlagSets) {
 		o.SetGlobalTCPMemRatio, "limit global max tcp memory usage")
 	fs.IntVar(&o.SetCgroupTCPMemRatio, "qrm-memory-cgroup-tcpmem-ratio",
 		o.SetCgroupTCPMemRatio, "limit cgroup max tcp memory usage")
+	fs.BoolVar(&o.EnableCgMemProtection, "enable-setting-cgmem-protection",
+		o.EnableCgMemProtection, "if set true, we will enable cgmem protection")
+	fs.StringVar(&o.CgMemProtectionK8sLevelConfigFile, "memory-cgroup-protection-k8s-config-file",
+		o.CgMemProtectionK8sLevelConfigFile, "the absolute path of cgmem protection k8s config file")
+	fs.StringVar(&o.CgMemProtectionCgroupLevelConfigFile, "memory-cgroup-protection-cgroup-config-file",
+		o.CgMemProtectionCgroupLevelConfigFile, "the absolute path of cgmem protection cgroup config file")
 }
+
 func (o *MemoryOptions) ApplyTo(conf *qrmconfig.MemoryQRMPluginConfig) error {
 	conf.PolicyName = o.PolicyName
 	conf.ReservedMemoryGB = o.ReservedMemoryGB
@@ -97,5 +116,8 @@ func (o *MemoryOptions) ApplyTo(conf *qrmconfig.MemoryQRMPluginConfig) error {
 	conf.EnableSettingSockMem = o.EnableSettingSockMem
 	conf.SetGlobalTCPMemRatio = o.SetGlobalTCPMemRatio
 	conf.SetCgroupTCPMemRatio = o.SetCgroupTCPMemRatio
+	conf.EnableCgMemProtection = o.EnableCgMemProtection
+	conf.CgMemProtectionK8sLevelConfigFile = o.CgMemProtectionK8sLevelConfigFile
+	conf.CgMemProtectionCgroupLevelConfigFile = o.CgMemProtectionCgroupLevelConfigFile
 	return nil
 }
