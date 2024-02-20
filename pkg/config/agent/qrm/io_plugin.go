@@ -18,7 +18,9 @@ package qrm
 
 type IOQRMPluginConfig struct {
 	// PolicyName is used to switch between several strategies
-	PolicyName string
+	PolicyName                  string
+	EnableIOAdvisor             bool
+	ExtraControlKnobConfigFile1 string
 
 	WritebackThrottlingOption
 }
