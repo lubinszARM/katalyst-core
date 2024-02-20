@@ -21,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/errors"
 
 	"github.com/kubewharf/katalyst-core/cmd/katalyst-agent/app/options/sysadvisor/qosaware/resource/cpu"
+	"github.com/kubewharf/katalyst-core/cmd/katalyst-agent/app/options/sysadvisor/qosaware/resource/io"
 	"github.com/kubewharf/katalyst-core/cmd/katalyst-agent/app/options/sysadvisor/qosaware/resource/memory"
 	"github.com/kubewharf/katalyst-core/pkg/config/agent/sysadvisor/qosaware/resource"
 )
@@ -31,14 +32,16 @@ type ResourceAdvisorOptions struct {
 
 	*cpu.CPUAdvisorOptions
 	*memory.MemoryAdvisorOptions
+	*io.IOAdvisorOptions
 }
 
 // NewResourceAdvisorOptions creates a new Options with a default config
 func NewResourceAdvisorOptions() *ResourceAdvisorOptions {
 	return &ResourceAdvisorOptions{
-		ResourceAdvisors:     []string{"cpu", "memory"},
+		ResourceAdvisors:     []string{"cpu", "memory", "storage"},
 		CPUAdvisorOptions:    cpu.NewCPUAdvisorOptions(),
 		MemoryAdvisorOptions: memory.NewMemoryAdvisorOptions(),
+		IOAdvisorOptions:     io.NewIOAdvisorOptions(),
 	}
 }
 
@@ -48,6 +51,7 @@ func (o *ResourceAdvisorOptions) AddFlags(fs *pflag.FlagSet) {
 
 	o.CPUAdvisorOptions.AddFlags(fs)
 	o.MemoryAdvisorOptions.AddFlags(fs)
+	o.IOAdvisorOptions.AddFlags(fs)
 }
 
 // ApplyTo fills up config with options
@@ -57,6 +61,7 @@ func (o *ResourceAdvisorOptions) ApplyTo(c *resource.ResourceAdvisorConfiguratio
 	var errList []error
 	errList = append(errList, o.CPUAdvisorOptions.ApplyTo(c.CPUAdvisorConfiguration))
 	errList = append(errList, o.MemoryAdvisorOptions.ApplyTo(c.MemoryAdvisorConfiguration))
+	errList = append(errList, o.IOAdvisorOptions.ApplyTo(c.IOAdvisorConfiguration))
 
 	return errors.NewAggregate(errList)
 }

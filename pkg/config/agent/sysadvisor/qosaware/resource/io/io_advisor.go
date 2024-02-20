@@ -14,23 +14,21 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package qrm
+package io
 
-type IOQRMPluginConfig struct {
-	// PolicyName is used to switch between several strategies
-	PolicyName                  string
-	EnableIOAdvisor             bool
-	ExtraControlKnobConfigFile1 string
+import (
+	"github.com/kubewharf/katalyst-core/pkg/agent/sysadvisor/types"
+)
 
-	WritebackThrottlingOption
+// IOAdvisorConfiguration stores configurations of io advisors in qos aware plugin
+type IOAdvisorConfiguration struct {
+	IOAdvisorPlugins []types.IOAdvisorPluginName
+	DefaultIOWeight  int64
 }
 
-type WritebackThrottlingOption struct {
-	EnableSettingWBT bool
-	WBTValueHDD      int
-	WBTValueSSD      int
-}
-
-func NewIOQRMPluginConfig() *IOQRMPluginConfig {
-	return &IOQRMPluginConfig{}
+// NewIOAdvisorConfiguration creates new io advisor configurations
+func NewIOAdvisorConfiguration() *IOAdvisorConfiguration {
+	return &IOAdvisorConfiguration{
+		IOAdvisorPlugins: make([]types.IOAdvisorPluginName, 0),
+	}
 }

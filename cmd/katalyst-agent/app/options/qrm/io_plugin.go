@@ -23,7 +23,9 @@ import (
 )
 
 type IOOptions struct {
-	PolicyName string
+	PolicyName                  string
+	EnableIOAdvisor             bool
+	ExtraControlKnobConfigFile1 string
 
 	WritebackThrottlingOption // option for writeback throttling, it determin the recycling speed of dirty memory.
 	// TO-DO
