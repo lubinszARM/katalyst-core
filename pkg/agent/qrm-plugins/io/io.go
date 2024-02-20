@@ -18,9 +18,9 @@ package io
 
 import (
 	"github.com/kubewharf/katalyst-core/cmd/katalyst-agent/app/agent/qrm"
-	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/io/staticpolicy"
+	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/io/dynamicpolicy"
 )
 
 func init() {
-	qrm.RegisterIOPolicyInitializer(staticpolicy.IOResourcePluginPolicyNameStatic, staticpolicy.NewStaticPolicy)
+	qrm.RegisterIOPolicyInitializer(dynamicpolicy.IOResourcePluginPolicyNameDynamic, dynamicpolicy.NewDynamicPolicy)
 }

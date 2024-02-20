@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package staticpolicy
+package dynamicpolicy
 
 import (
 	"context"
@@ -72,7 +72,7 @@ func makeTestGenericContext(t *testing.T) *agent.GenericContext {
 	}
 }
 
-func TestNewStaticPolicy(t *testing.T) {
+func TestNewDynamicPolicy(t *testing.T) {
 	t.Parallel()
 
 	agentCtx := makeTestGenericContext(t)
@@ -92,7 +92,7 @@ func TestNewStaticPolicy(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "new static policy",
+			name: "new dynamic policy",
 			args: args{
 				agentCtx:  agentCtx,
 				conf:      conf,
@@ -104,14 +104,14 @@ func TestNewStaticPolicy(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, got1, err := NewStaticPolicy(tt.args.agentCtx, tt.args.conf, tt.args.in2, tt.args.agentName)
+			got, got1, err := NewDynamicPolicy(tt.args.agentCtx, tt.args.conf, tt.args.in2, tt.args.agentName)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("NewStaticPolicy() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("NewDynamicPolicy() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 
 			if got != tt.want {
-				t.Errorf("NewStaticPolicy() got = %v, want %v", got, tt.want)
+				t.Errorf("NewDynamicPolicy() got = %v, want %v", got, tt.want)
 			}
 
 			assert.NotNilf(t, got1, "got nil policy object")
@@ -119,7 +119,7 @@ func TestNewStaticPolicy(t *testing.T) {
 	}
 }
 
-func TestStaticPolicy_Start(t *testing.T) {
+func TestDynamicPolicy_Start(t *testing.T) {
 	t.Parallel()
 
 	type fields struct {
@@ -136,9 +136,9 @@ func TestStaticPolicy_Start(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "start static policy",
+			name: "start dynamic policy",
 			fields: fields{
-				name:       fmt.Sprintf("%s_%s", qrm.QRMPluginNameIO, IOResourcePluginPolicyNameStatic),
+				name:       fmt.Sprintf("%s_%s", qrm.QRMPluginNameIO, IOResourcePluginPolicyNameDynamic),
 				stopCh:     make(chan struct{}),
 				started:    false,
 				emitter:    metrics.DummyMetrics{},
@@ -150,7 +150,7 @@ func TestStaticPolicy_Start(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := &StaticPolicy{
+			p := &DynamicPolicy{
 				name:       tt.fields.name,
 				stopCh:     tt.fields.stopCh,
 				started:    tt.fields.started,
@@ -159,13 +159,13 @@ func TestStaticPolicy_Start(t *testing.T) {
 				agentCtx:   tt.fields.agentCtx,
 			}
 			if err := p.Start(); (err != nil) != tt.wantErr {
-				t.Errorf("StaticPolicy.Start() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("DynamicPolicy.Start() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
 }
 
-func TestStaticPolicy_Stop(t *testing.T) {
+func TestDynamicPolicy_Stop(t *testing.T) {
 	t.Parallel()
 
 	type fields struct {
@@ -182,9 +182,9 @@ func TestStaticPolicy_Stop(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "stop static policy",
+			name: "stop dynamic policy",
 			fields: fields{
-				name:       fmt.Sprintf("%s_%s", qrm.QRMPluginNameIO, IOResourcePluginPolicyNameStatic),
+				name:       fmt.Sprintf("%s_%s", qrm.QRMPluginNameIO, IOResourcePluginPolicyNameDynamic),
 				stopCh:     make(chan struct{}),
 				started:    true,
 				emitter:    metrics.DummyMetrics{},
@@ -196,7 +196,7 @@ func TestStaticPolicy_Stop(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := &StaticPolicy{
+			p := &DynamicPolicy{
 				name:       tt.fields.name,
 				stopCh:     tt.fields.stopCh,
 				started:    tt.fields.started,
@@ -205,13 +205,13 @@ func TestStaticPolicy_Stop(t *testing.T) {
 				agentCtx:   tt.fields.agentCtx,
 			}
 			if err := p.Stop(); (err != nil) != tt.wantErr {
-				t.Errorf("StaticPolicy.Stop() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("DynamicPolicy.Stop() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
 }
 
-func TestStaticPolicy_Name(t *testing.T) {
+func TestDynamicPolicy_Name(t *testing.T) {
 	t.Parallel()
 
 	type fields struct {
@@ -230,19 +230,19 @@ func TestStaticPolicy_Name(t *testing.T) {
 		{
 			name: "get policy name",
 			fields: fields{
-				name:       fmt.Sprintf("%s_%s", qrm.QRMPluginNameIO, IOResourcePluginPolicyNameStatic),
+				name:       fmt.Sprintf("%s_%s", qrm.QRMPluginNameIO, IOResourcePluginPolicyNameDynamic),
 				stopCh:     make(chan struct{}),
 				started:    true,
 				emitter:    metrics.DummyMetrics{},
 				metaServer: makeMetaServer(),
 				agentCtx:   makeTestGenericContext(t),
 			},
-			want: fmt.Sprintf("%s_%s", qrm.QRMPluginNameIO, IOResourcePluginPolicyNameStatic),
+			want: fmt.Sprintf("%s_%s", qrm.QRMPluginNameIO, IOResourcePluginPolicyNameDynamic),
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := &StaticPolicy{
+			p := &DynamicPolicy{
 				name:       tt.fields.name,
 				stopCh:     tt.fields.stopCh,
 				started:    tt.fields.started,
@@ -251,13 +251,13 @@ func TestStaticPolicy_Name(t *testing.T) {
 				agentCtx:   tt.fields.agentCtx,
 			}
 			if got := p.Name(); got != tt.want {
-				t.Errorf("StaticPolicy.Name() = %v, want %v", got, tt.want)
+				t.Errorf("DynamicPolicy.Name() = %v, want %v", got, tt.want)
 			}
 		})
 	}
 }
 
-func TestStaticPolicy_ResourceName(t *testing.T) {
+func TestDynamicPolicy_ResourceName(t *testing.T) {
 	t.Parallel()
 
 	type fields struct {
@@ -276,7 +276,7 @@ func TestStaticPolicy_ResourceName(t *testing.T) {
 		{
 			name: "get policy name",
 			fields: fields{
-				name:       fmt.Sprintf("%s_%s", qrm.QRMPluginNameIO, IOResourcePluginPolicyNameStatic),
+				name:       fmt.Sprintf("%s_%s", qrm.QRMPluginNameIO, IOResourcePluginPolicyNameDynamic),
 				stopCh:     make(chan struct{}),
 				started:    true,
 				emitter:    metrics.DummyMetrics{},
@@ -288,7 +288,7 @@ func TestStaticPolicy_ResourceName(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := &StaticPolicy{
+			p := &DynamicPolicy{
 				name:       tt.fields.name,
 				stopCh:     tt.fields.stopCh,
 				started:    tt.fields.started,
@@ -297,13 +297,13 @@ func TestStaticPolicy_ResourceName(t *testing.T) {
 				agentCtx:   tt.fields.agentCtx,
 			}
 			if got := p.ResourceName(); got != tt.want {
-				t.Errorf("StaticPolicy.ResourceName() = %v, want %v", got, tt.want)
+				t.Errorf("DynamicPolicy.ResourceName() = %v, want %v", got, tt.want)
 			}
 		})
 	}
 }
 
-func TestStaticPolicy_GetTopologyHints(t *testing.T) {
+func TestDynamicPolicy_GetTopologyHints(t *testing.T) {
 	t.Parallel()
 
 	type fields struct {
@@ -328,7 +328,7 @@ func TestStaticPolicy_GetTopologyHints(t *testing.T) {
 		{
 			name: "get topology hints",
 			fields: fields{
-				name:       fmt.Sprintf("%s_%s", qrm.QRMPluginNameIO, IOResourcePluginPolicyNameStatic),
+				name:       fmt.Sprintf("%s_%s", qrm.QRMPluginNameIO, IOResourcePluginPolicyNameDynamic),
 				stopCh:     make(chan struct{}),
 				started:    true,
 				emitter:    metrics.DummyMetrics{},
@@ -345,7 +345,7 @@ func TestStaticPolicy_GetTopologyHints(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := &StaticPolicy{
+			p := &DynamicPolicy{
 				name:       tt.fields.name,
 				stopCh:     tt.fields.stopCh,
 				started:    tt.fields.started,
@@ -355,17 +355,17 @@ func TestStaticPolicy_GetTopologyHints(t *testing.T) {
 			}
 			gotResp, err := p.GetTopologyHints(tt.args.in0, tt.args.req)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("StaticPolicy.GetTopologyHints() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("DynamicPolicy.GetTopologyHints() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !reflect.DeepEqual(gotResp, tt.wantResp) {
-				t.Errorf("StaticPolicy.GetTopologyHints() = %v, want %v", gotResp, tt.wantResp)
+				t.Errorf("DynamicPolicy.GetTopologyHints() = %v, want %v", gotResp, tt.wantResp)
 			}
 		})
 	}
 }
 
-func TestStaticPolicy_RemovePod(t *testing.T) {
+func TestDynamicPolicy_RemovePod(t *testing.T) {
 	t.Parallel()
 
 	type fields struct {
@@ -390,7 +390,7 @@ func TestStaticPolicy_RemovePod(t *testing.T) {
 		{
 			name: "remove pod",
 			fields: fields{
-				name:       fmt.Sprintf("%s_%s", qrm.QRMPluginNameIO, IOResourcePluginPolicyNameStatic),
+				name:       fmt.Sprintf("%s_%s", qrm.QRMPluginNameIO, IOResourcePluginPolicyNameDynamic),
 				stopCh:     make(chan struct{}),
 				started:    true,
 				emitter:    metrics.DummyMetrics{},
@@ -407,7 +407,7 @@ func TestStaticPolicy_RemovePod(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := &StaticPolicy{
+			p := &DynamicPolicy{
 				name:       tt.fields.name,
 				stopCh:     tt.fields.stopCh,
 				started:    tt.fields.started,
@@ -417,17 +417,17 @@ func TestStaticPolicy_RemovePod(t *testing.T) {
 			}
 			got, err := p.RemovePod(tt.args.in0, tt.args.req)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("StaticPolicy.RemovePod() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("DynamicPolicy.RemovePod() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("StaticPolicy.RemovePod() = %v, want %v", got, tt.want)
+				t.Errorf("DynamicPolicy.RemovePod() = %v, want %v", got, tt.want)
 			}
 		})
 	}
 }
 
-func TestStaticPolicy_GetResourcesAllocation(t *testing.T) {
+func TestDynamicPolicy_GetResourcesAllocation(t *testing.T) {
 	t.Parallel()
 
 	type fields struct {
@@ -452,7 +452,7 @@ func TestStaticPolicy_GetResourcesAllocation(t *testing.T) {
 		{
 			name: "get resources allocation",
 			fields: fields{
-				name:       fmt.Sprintf("%s_%s", qrm.QRMPluginNameIO, IOResourcePluginPolicyNameStatic),
+				name:       fmt.Sprintf("%s_%s", qrm.QRMPluginNameIO, IOResourcePluginPolicyNameDynamic),
 				stopCh:     make(chan struct{}),
 				started:    true,
 				emitter:    metrics.DummyMetrics{},
@@ -469,7 +469,7 @@ func TestStaticPolicy_GetResourcesAllocation(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := &StaticPolicy{
+			p := &DynamicPolicy{
 				name:       tt.fields.name,
 				stopCh:     tt.fields.stopCh,
 				started:    tt.fields.started,
@@ -479,17 +479,17 @@ func TestStaticPolicy_GetResourcesAllocation(t *testing.T) {
 			}
 			got, err := p.GetResourcesAllocation(tt.args.in0, tt.args.in1)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("StaticPolicy.GetResourcesAllocation() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("DynamicPolicy.GetResourcesAllocation() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("StaticPolicy.GetResourcesAllocation() = %v, want %v", got, tt.want)
+				t.Errorf("DynamicPolicy.GetResourcesAllocation() = %v, want %v", got, tt.want)
 			}
 		})
 	}
 }
 
-func TestStaticPolicy_GetTopologyAwareResources(t *testing.T) {
+func TestDynamicPolicy_GetTopologyAwareResources(t *testing.T) {
 	t.Parallel()
 
 	type fields struct {
@@ -514,7 +514,7 @@ func TestStaticPolicy_GetTopologyAwareResources(t *testing.T) {
 		{
 			name: "get topology-aware resources",
 			fields: fields{
-				name:       fmt.Sprintf("%s_%s", qrm.QRMPluginNameIO, IOResourcePluginPolicyNameStatic),
+				name:       fmt.Sprintf("%s_%s", qrm.QRMPluginNameIO, IOResourcePluginPolicyNameDynamic),
 				stopCh:     make(chan struct{}),
 				started:    true,
 				emitter:    metrics.DummyMetrics{},
@@ -531,7 +531,7 @@ func TestStaticPolicy_GetTopologyAwareResources(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := &StaticPolicy{
+			p := &DynamicPolicy{
 				name:       tt.fields.name,
 				stopCh:     tt.fields.stopCh,
 				started:    tt.fields.started,
@@ -541,17 +541,17 @@ func TestStaticPolicy_GetTopologyAwareResources(t *testing.T) {
 			}
 			got, err := p.GetTopologyAwareResources(tt.args.in0, tt.args.in1)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("StaticPolicy.GetTopologyAwareResources() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("DynamicPolicy.GetTopologyAwareResources() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("StaticPolicy.GetTopologyAwareResources() = %v, want %v", got, tt.want)
+				t.Errorf("DynamicPolicy.GetTopologyAwareResources() = %v, want %v", got, tt.want)
 			}
 		})
 	}
 }
 
-func TestStaticPolicy_GetTopologyAwareAllocatableResources(t *testing.T) {
+func TestDynamicPolicy_GetTopologyAwareAllocatableResources(t *testing.T) {
 	t.Parallel()
 
 	type fields struct {
@@ -576,7 +576,7 @@ func TestStaticPolicy_GetTopologyAwareAllocatableResources(t *testing.T) {
 		{
 			name: "get topology-aware allocatable resources",
 			fields: fields{
-				name:       fmt.Sprintf("%s_%s", qrm.QRMPluginNameIO, IOResourcePluginPolicyNameStatic),
+				name:       fmt.Sprintf("%s_%s", qrm.QRMPluginNameIO, IOResourcePluginPolicyNameDynamic),
 				stopCh:     make(chan struct{}),
 				started:    true,
 				emitter:    metrics.DummyMetrics{},
@@ -593,7 +593,7 @@ func TestStaticPolicy_GetTopologyAwareAllocatableResources(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := &StaticPolicy{
+			p := &DynamicPolicy{
 				name:       tt.fields.name,
 				stopCh:     tt.fields.stopCh,
 				started:    tt.fields.started,
@@ -603,17 +603,17 @@ func TestStaticPolicy_GetTopologyAwareAllocatableResources(t *testing.T) {
 			}
 			got, err := p.GetTopologyAwareAllocatableResources(tt.args.in0, tt.args.in1)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("StaticPolicy.GetTopologyAwareAllocatableResources() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("DynamicPolicy.GetTopologyAwareAllocatableResources() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("StaticPolicy.GetTopologyAwareAllocatableResources() = %v, want %v", got, tt.want)
+				t.Errorf("DynamicPolicy.GetTopologyAwareAllocatableResources() = %v, want %v", got, tt.want)
 			}
 		})
 	}
 }
 
-func TestStaticPolicy_GetResourcePluginOptions(t *testing.T) {
+func TestDynamicPolicy_GetResourcePluginOptions(t *testing.T) {
 	t.Parallel()
 
 	type fields struct {
@@ -638,7 +638,7 @@ func TestStaticPolicy_GetResourcePluginOptions(t *testing.T) {
 		{
 			name: "test get resource plugin options",
 			fields: fields{
-				name:       fmt.Sprintf("%s_%s", qrm.QRMPluginNameIO, IOResourcePluginPolicyNameStatic),
+				name:       fmt.Sprintf("%s_%s", qrm.QRMPluginNameIO, IOResourcePluginPolicyNameDynamic),
 				stopCh:     make(chan struct{}),
 				started:    true,
 				emitter:    metrics.DummyMetrics{},
@@ -659,7 +659,7 @@ func TestStaticPolicy_GetResourcePluginOptions(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := &StaticPolicy{
+			p := &DynamicPolicy{
 				name:       tt.fields.name,
 				stopCh:     tt.fields.stopCh,
 				started:    tt.fields.started,
@@ -669,17 +669,17 @@ func TestStaticPolicy_GetResourcePluginOptions(t *testing.T) {
 			}
 			got, err := p.GetResourcePluginOptions(tt.args.in0, tt.args.in1)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("StaticPolicy.GetResourcePluginOptions() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("DynamicPolicy.GetResourcePluginOptions() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("StaticPolicy.GetResourcePluginOptions() = %v, want %v", got, tt.want)
+				t.Errorf("DynamicPolicy.GetResourcePluginOptions() = %v, want %v", got, tt.want)
 			}
 		})
 	}
 }
 
-func TestStaticPolicy_Allocate(t *testing.T) {
+func TestDynamicPolicy_Allocate(t *testing.T) {
 	t.Parallel()
 
 	type fields struct {
@@ -704,7 +704,7 @@ func TestStaticPolicy_Allocate(t *testing.T) {
 		{
 			name: "test allocate",
 			fields: fields{
-				name:       fmt.Sprintf("%s_%s", qrm.QRMPluginNameIO, IOResourcePluginPolicyNameStatic),
+				name:       fmt.Sprintf("%s_%s", qrm.QRMPluginNameIO, IOResourcePluginPolicyNameDynamic),
 				stopCh:     make(chan struct{}),
 				started:    true,
 				emitter:    metrics.DummyMetrics{},
@@ -729,7 +729,7 @@ func TestStaticPolicy_Allocate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := &StaticPolicy{
+			p := &DynamicPolicy{
 				name:       tt.fields.name,
 				stopCh:     tt.fields.stopCh,
 				started:    tt.fields.started,
@@ -739,17 +739,17 @@ func TestStaticPolicy_Allocate(t *testing.T) {
 			}
 			gotResp, err := p.Allocate(tt.args.in0, tt.args.req)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("StaticPolicy.Allocate() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("DynamicPolicy.Allocate() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !reflect.DeepEqual(gotResp, tt.wantResp) {
-				t.Errorf("StaticPolicy.Allocate() = %v, want %v", gotResp, tt.wantResp)
+				t.Errorf("DynamicPolicy.Allocate() = %v, want %v", gotResp, tt.wantResp)
 			}
 		})
 	}
 }
 
-func TestStaticPolicy_PreStartContainer(t *testing.T) {
+func TestDynamicPolicy_PreStartContainer(t *testing.T) {
 	t.Parallel()
 
 	type fields struct {
@@ -774,7 +774,7 @@ func TestStaticPolicy_PreStartContainer(t *testing.T) {
 		{
 			name: "test pre-start container",
 			fields: fields{
-				name:       fmt.Sprintf("%s_%s", qrm.QRMPluginNameIO, IOResourcePluginPolicyNameStatic),
+				name:       fmt.Sprintf("%s_%s", qrm.QRMPluginNameIO, IOResourcePluginPolicyNameDynamic),
 				stopCh:     make(chan struct{}),
 				started:    true,
 				emitter:    metrics.DummyMetrics{},
@@ -791,7 +791,7 @@ func TestStaticPolicy_PreStartContainer(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := &StaticPolicy{
+			p := &DynamicPolicy{
 				name:       tt.fields.name,
 				stopCh:     tt.fields.stopCh,
 				started:    tt.fields.started,
@@ -801,11 +801,11 @@ func TestStaticPolicy_PreStartContainer(t *testing.T) {
 			}
 			got, err := p.PreStartContainer(tt.args.in0, tt.args.in1)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("StaticPolicy.PreStartContainer() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("DynamicPolicy.PreStartContainer() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("StaticPolicy.PreStartContainer() = %v, want %v", got, tt.want)
+				t.Errorf("DynamicPolicy.PreStartContainer() = %v, want %v", got, tt.want)
 			}
 		})
 	}
