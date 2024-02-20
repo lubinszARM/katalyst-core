@@ -14,23 +14,20 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package qrm
+package types
 
-type IOQRMPluginConfig struct {
-	// PolicyName is used to switch between several strategies
-	PolicyName                  string
-	EnableIOAdvisor             bool
-	ExtraControlKnobConfigFile1 string
+import (
+	"time"
+)
 
-	WritebackThrottlingOption
+type IOAdvisorPluginName string
+
+type ExtraIOAdvices struct {
+	CgroupPath string
+	Values     map[string]string
 }
 
-type WritebackThrottlingOption struct {
-	EnableSettingWBT bool
-	WBTValueHDD      int
-	WBTValueSSD      int
-}
-
-func NewIOQRMPluginConfig() *IOQRMPluginConfig {
-	return &IOQRMPluginConfig{}
+type InternalIOCalculationResult struct {
+	ExtraEntries []ExtraIOAdvices
+	TimeStamp    time.Time
 }

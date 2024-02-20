@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package staticpolicy
+package dynamicpolicy
 
 import (
 	"context"
@@ -22,12 +22,15 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/grpc"
 	"k8s.io/apimachinery/pkg/util/wait"
 	pluginapi "k8s.io/kubelet/pkg/apis/resourceplugin/v1alpha1"
+	"k8s.io/utils/clock"
 
 	"github.com/kubewharf/katalyst-api/pkg/consts"
 	"github.com/kubewharf/katalyst-core/cmd/katalyst-agent/app/agent"
 	"github.com/kubewharf/katalyst-core/cmd/katalyst-agent/app/agent/qrm"
+	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/advisorsvc"
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/io/handlers/dirtymem"
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/util"
 	"github.com/kubewharf/katalyst-core/pkg/agent/utilcomponent/periodicalhandler"
@@ -35,15 +38,17 @@ import (
 	"github.com/kubewharf/katalyst-core/pkg/metaserver"
 	"github.com/kubewharf/katalyst-core/pkg/metrics"
 	"github.com/kubewharf/katalyst-core/pkg/util/general"
+	"github.com/kubewharf/katalyst-core/pkg/util/process"
+	"github.com/kubewharf/katalyst-core/pkg/util/timemonitor"
 )
 
 const (
-	// IOResourcePluginPolicyNameStatic is the policy name of static io resource plugin
-	IOResourcePluginPolicyNameStatic = string(consts.ResourcePluginPolicyNameStatic)
+	// IOResourcePluginPolicyNameDynamic is the policy name of dynamic io resource plugin
+	IOResourcePluginPolicyNameDynamic = string(consts.ResourcePluginPolicyNameDynamic)
 )
 
-// StaticPolicy is the static io policy
-type StaticPolicy struct {
+// DynamicPolicy is the dynamic io policy
+type DynamicPolicy struct {
 	sync.Mutex
 
 	name       string
@@ -53,34 +58,47 @@ type StaticPolicy struct {
 	metaServer *metaserver.MetaServer
 	agentCtx   *agent.GenericContext
 
-	enableSettingWBT bool
+	advisorClient     advisorsvc.AdvisorServiceClient
+	advisorConn       *grpc.ClientConn
+	lwRecvTimeMonitor *timemonitor.TimeMonitor
+
+	enableSettingWBT       bool
+	enableIOAdvisor        bool
+	ioAdvisorSocketAbsPath string
+	ioPluginSocketAbsPath  string
 }
 
-// NewStaticPolicy returns a static io policy
-func NewStaticPolicy(agentCtx *agent.GenericContext, conf *config.Configuration,
+// NewDynamicPolicy returns a dynamic io policy
+func NewDynamicPolicy(agentCtx *agent.GenericContext, conf *config.Configuration,
 	_ interface{}, agentName string) (bool, agent.Component, error) {
 	wrappedEmitter := agentCtx.EmitterPool.GetDefaultMetricsEmitter().WithTags(agentName, metrics.MetricTag{
 		Key: util.QRMPluginPolicyTagName,
-		Val: IOResourcePluginPolicyNameStatic,
+		Val: IOResourcePluginPolicyNameDynamic,
 	})
 
-	policyImplement := &StaticPolicy{
-		emitter:          wrappedEmitter,
-		metaServer:       agentCtx.MetaServer,
-		agentCtx:         agentCtx,
-		stopCh:           make(chan struct{}),
-		name:             fmt.Sprintf("%s_%s", agentName, IOResourcePluginPolicyNameStatic),
-		enableSettingWBT: conf.EnableSettingWBT,
+	policyImplement := &DynamicPolicy{
+		emitter:                wrappedEmitter,
+		metaServer:             agentCtx.MetaServer,
+		agentCtx:               agentCtx,
+		stopCh:                 make(chan struct{}),
+		name:                   fmt.Sprintf("%s_%s", agentName, IOResourcePluginPolicyNameDynamic),
+		enableSettingWBT:       conf.EnableSettingWBT,
+		enableIOAdvisor:        conf.EnableIOAdvisor,
+		ioAdvisorSocketAbsPath: conf.IOAdvisorSocketAbsPath,
+		ioPluginSocketAbsPath:  conf.IOPluginSocketAbsPath,
 	}
 
 	// todo: currently there is no resource needed to be topology-aware and synchronously allocated in this plugin,
 	// so not to wrap the plugin by RegistrationPluginWrapper and it won't be registered to QRM framework temporarily.
 
+	//	ioadvisor.RegisterControlKnobHandler(ioadvisor.ControlKnobKeyIOWeight,
+	//		ioadvisor.ControlKnobHandlerWithChecker(handleAdvisorIOWeight))
+
 	return true, &agent.PluginWrapper{GenericPlugin: policyImplement}, nil
 }
 
 // Start starts this plugin
-func (p *StaticPolicy) Start() (err error) {
+func (p *DynamicPolicy) Start() (err error) {
 	general.Infof("called")
 
 	p.Lock()
@@ -108,7 +126,7 @@ func (p *StaticPolicy) Start() (err error) {
 
 	if p.enableSettingWBT {
 		general.Infof("setWBT enabled")
-		err := periodicalhandler.RegisterPeriodicalHandler(qrm.QRMMemoryPluginPeriodicalHandlerGroupName,
+		err := periodicalhandler.RegisterPeriodicalHandler(qrm.QRMIOPluginPeriodicalHandlerGroupName,
 			dirtymem.EnableSetDirtyMemPeriodicalHandlerName, dirtymem.SetDirtyMem, 300*time.Second)
 		if err != nil {
 			general.Infof("setSockMem failed, err=%v", err)
@@ -118,11 +136,55 @@ func (p *StaticPolicy) Start() (err error) {
 	go wait.Until(func() {
 		periodicalhandler.ReadyToStartHandlersByGroup(qrm.QRMIOPluginPeriodicalHandlerGroupName)
 	}, 5*time.Second, p.stopCh)
+
+	if !p.enableIOAdvisor {
+		general.Infof("start dynamic policy io plugin without io advisor")
+		return nil
+	} else if p.ioAdvisorSocketAbsPath == "" {
+		return fmt.Errorf("invalid ioAdvisorSocketAbsPath: %s", p.ioAdvisorSocketAbsPath)
+	}
+
+	general.Infof("start dynamic policy io plugin with io advisor")
+	err = p.initAdvisorClientConn()
+	if err != nil {
+		general.Errorf("initAdvisorClientConn failed with error: %v", err)
+		return
+	}
+
+	go wait.BackoffUntil(func() { p.serveForAdvisor(p.stopCh) }, wait.NewExponentialBackoffManager(
+		800*time.Millisecond, 30*time.Second, 2*time.Minute, 2.0, 0, &clock.RealClock{}), true, p.stopCh)
+
+	communicateWithIOAdvisorServer := func() {
+		general.Infof("waiting io plugin checkpoint server serving confirmation")
+		if conn, err := process.Dial(p.ioPluginSocketAbsPath, 5*time.Second); err != nil {
+			general.Errorf("dial check at socket: %s failed with err: %v", p.ioPluginSocketAbsPath, err)
+			return
+		} else {
+			_ = conn.Close()
+		}
+		general.Infof("io plugin checkpoint server serving confirmed")
+
+		// call lw of IOAdvisorServer and do allocation
+		if err := p.lwIOAdvisorServer(p.stopCh); err != nil {
+			general.Errorf("lwIOAdvisorServer failed with error: %v", err)
+		} else {
+			general.Infof("lwIOAdvisorServer finished")
+		}
+	}
+
+	go wait.BackoffUntil(communicateWithIOAdvisorServer, wait.NewExponentialBackoffManager(800*time.Millisecond,
+		30*time.Second, 2*time.Minute, 2.0, 0, &clock.RealClock{}), true, p.stopCh)
+
+	p.lwRecvTimeMonitor = timemonitor.NewTimeMonitor(ioAdvisorLWRecvTimeMonitorName,
+		ioAdvisorLWRecvTimeMonitorDurationThreshold, ioAdvisorLWRecvTimeMonitorInterval,
+		util.MetricNameLWRecvStuck, p.emitter)
+	go p.lwRecvTimeMonitor.Run(p.stopCh)
+
 	return nil
 }
 
 // Stop stops this plugin
-func (p *StaticPolicy) Stop() error {
+func (p *DynamicPolicy) Stop() error {
 	p.Lock()
 	defer func() {
 		p.started = false
@@ -142,18 +204,18 @@ func (p *StaticPolicy) Stop() error {
 }
 
 // Name returns the name of this plugin
-func (p *StaticPolicy) Name() string {
+func (p *DynamicPolicy) Name() string {
 	return p.name
 }
 
 // ResourceName returns resource names managed by this plugin
-func (p *StaticPolicy) ResourceName() string {
+func (p *DynamicPolicy) ResourceName() string {
 	// todo: return correct value when there is resource needed to be topology-aware and synchronously allocated in this plugin
 	return ""
 }
 
 // GetTopologyHints returns hints of corresponding resources
-func (p *StaticPolicy) GetTopologyHints(_ context.Context,
+func (p *DynamicPolicy) GetTopologyHints(_ context.Context,
 	req *pluginapi.ResourceRequest) (resp *pluginapi.ResourceHintsResponse, err error) {
 	if req == nil {
 		return nil, fmt.Errorf("GetTopologyHints got nil req")
@@ -162,7 +224,7 @@ func (p *StaticPolicy) GetTopologyHints(_ context.Context,
 	return util.PackResourceHintsResponse(req, p.ResourceName(), nil)
 }
 
-func (p *StaticPolicy) RemovePod(_ context.Context,
+func (p *DynamicPolicy) RemovePod(_ context.Context,
 	req *pluginapi.RemovePodRequest) (*pluginapi.RemovePodResponse, error) {
 	if req == nil {
 		return nil, fmt.Errorf("RemovePod got nil req")
@@ -172,25 +234,25 @@ func (p *StaticPolicy) RemovePod(_ context.Context,
 }
 
 // GetResourcesAllocation returns allocation results of corresponding resources
-func (p *StaticPolicy) GetResourcesAllocation(_ context.Context,
+func (p *DynamicPolicy) GetResourcesAllocation(_ context.Context,
 	_ *pluginapi.GetResourcesAllocationRequest) (*pluginapi.GetResourcesAllocationResponse, error) {
 	return &pluginapi.GetResourcesAllocationResponse{}, nil
 }
 
 // GetTopologyAwareResources returns allocation results of corresponding resources as topology aware format
-func (p *StaticPolicy) GetTopologyAwareResources(_ context.Context,
+func (p *DynamicPolicy) GetTopologyAwareResources(_ context.Context,
 	_ *pluginapi.GetTopologyAwareResourcesRequest) (*pluginapi.GetTopologyAwareResourcesResponse, error) {
 	return &pluginapi.GetTopologyAwareResourcesResponse{}, nil
 }
 
 // GetTopologyAwareAllocatableResources returns corresponding allocatable resources as topology aware format
-func (p *StaticPolicy) GetTopologyAwareAllocatableResources(_ context.Context,
+func (p *DynamicPolicy) GetTopologyAwareAllocatableResources(_ context.Context,
 	_ *pluginapi.GetTopologyAwareAllocatableResourcesRequest) (*pluginapi.GetTopologyAwareAllocatableResourcesResponse, error) {
 	return &pluginapi.GetTopologyAwareAllocatableResourcesResponse{}, nil
 }
 
 // GetResourcePluginOptions returns options to be communicated with Resource Manager
-func (p *StaticPolicy) GetResourcePluginOptions(context.Context,
+func (p *DynamicPolicy) GetResourcePluginOptions(context.Context,
 	*pluginapi.Empty) (*pluginapi.ResourcePluginOptions, error) {
 	return &pluginapi.ResourcePluginOptions{
 		PreStartRequired:      false,
@@ -202,7 +264,7 @@ func (p *StaticPolicy) GetResourcePluginOptions(context.Context,
 // Allocate is called during pod admit so that the resource
 // plugin can allocate corresponding resource for the container
 // according to resource request
-func (p *StaticPolicy) Allocate(_ context.Context,
+func (p *DynamicPolicy) Allocate(_ context.Context,
 	req *pluginapi.ResourceRequest) (resp *pluginapi.ResourceAllocationResponse, err error) {
 	if req == nil {
 		return nil, fmt.Errorf("GetTopologyHints got nil req")
@@ -226,7 +288,7 @@ func (p *StaticPolicy) Allocate(_ context.Context,
 // PreStartContainer is called, if indicated by resource plugin during registration phase,
 // before each container start. Resource plugin can run resource specific operations
 // such as resetting the resource before making resources available to the container
-func (p *StaticPolicy) PreStartContainer(context.Context,
+func (p *DynamicPolicy) PreStartContainer(context.Context,
 	*pluginapi.PreStartContainerRequest) (*pluginapi.PreStartContainerResponse, error) {
 	return &pluginapi.PreStartContainerResponse{}, nil
 }

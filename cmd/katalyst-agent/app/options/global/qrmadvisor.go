@@ -29,6 +29,9 @@ type QRMAdvisorOptions struct {
 
 	MemoryAdvisorSocketAbsPath string
 	MemoryPluginSocketAbsPath  string
+
+	IOAdvisorSocketAbsPath string
+	IOPluginSocketAbsPath  string
 }
 
 // NewQRMAdvisorOptions creates a new options with a default config
@@ -38,6 +41,8 @@ func NewQRMAdvisorOptions() *QRMAdvisorOptions {
 		CPUPluginSocketAbsPath:     "/var/lib/katalyst/qrm_advisor/cpu_plugin.sock",
 		MemoryAdvisorSocketAbsPath: "/var/lib/katalyst/qrm_advisor/memory_advisor.sock",
 		MemoryPluginSocketAbsPath:  "/var/lib/katalyst/qrm_advisor/memory_plugin.sock",
+		IOAdvisorSocketAbsPath:     "/var/lib/katalyst/qrm_advisor/io_advisor.sock",
+		IOPluginSocketAbsPath:      "/var/lib/katalyst/qrm_advisor/io_plugin.sock",
 	}
 }
 
@@ -49,6 +54,8 @@ func (o *QRMAdvisorOptions) AddFlags(fss *cliflag.NamedFlagSets) {
 	fs.StringVar(&o.CPUPluginSocketAbsPath, "cpu-plugin-sock-abs-path", o.CPUPluginSocketAbsPath, "absolute path of socket file for cpu plugin to communicate with cpu advisor")
 	fs.StringVar(&o.MemoryAdvisorSocketAbsPath, "memory-advisor-sock-abs-path", o.MemoryAdvisorSocketAbsPath, "absolute path of socket file for memory advisor served in sys-advisor")
 	fs.StringVar(&o.MemoryPluginSocketAbsPath, "memory-plugin-sock-abs-path", o.MemoryPluginSocketAbsPath, "absolute path of socket file for cpu plugin to communicate with memory advisor")
+	fs.StringVar(&o.IOAdvisorSocketAbsPath, "io-advisor-sock-abs-path", o.IOAdvisorSocketAbsPath, "absolute path of socket file for io advisor served in sys-advisor")
+	fs.StringVar(&o.IOPluginSocketAbsPath, "io-plugin-sock-abs-path", o.IOPluginSocketAbsPath, "absolute path of socket file for io plugin to communicate with io advisor")
 }
 
 // ApplyTo fills up config with options
@@ -57,5 +64,7 @@ func (o *QRMAdvisorOptions) ApplyTo(c *global.QRMAdvisorConfiguration) error {
 	c.CPUPluginSocketAbsPath = o.CPUPluginSocketAbsPath
 	c.MemoryAdvisorSocketAbsPath = o.MemoryAdvisorSocketAbsPath
 	c.MemoryPluginSocketAbsPath = o.MemoryPluginSocketAbsPath
+	c.IOAdvisorSocketAbsPath = o.IOAdvisorSocketAbsPath
+	c.IOPluginSocketAbsPath = o.IOPluginSocketAbsPath
 	return nil
 }

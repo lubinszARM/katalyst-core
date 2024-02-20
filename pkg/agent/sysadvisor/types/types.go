@@ -36,6 +36,7 @@ type QoSResourceName string
 const (
 	QoSResourceCPU    QoSResourceName = "cpu"
 	QoSResourceMemory QoSResourceName = "memory"
+	QoSResourceIO     QoSResourceName = "io"
 )
 
 // ContainerInfo contains container information for sysadvisor plugins

@@ -109,6 +109,16 @@ func newSubQRMServer(resourceName v1.ResourceName, advisorWrapper resource.Resou
 		advisorRecvCh := advisorRecvChInterface.(chan types.TriggerInfo)
 		advisorSendCh := advisorSendChInterface.(chan types.InternalMemoryCalculationResult)
 		return NewMemoryServer(advisorSendCh, advisorRecvCh, conf, metaCache, metaServer, emitter)
+	case v1.ResourceStorage:
+		fmt.Printf("BBLU newSubQRMServer: storage....\n")
+		subAdvisor, err := advisorWrapper.GetSubAdvisor(types.QoSResourceIO)
+		if err != nil {
+			return nil, err
+		}
+		advisorRecvChInterface, advisorSendChInterface := subAdvisor.GetChannels()
+		advisorRecvCh := advisorRecvChInterface.(chan types.TriggerInfo)
+		advisorSendCh := advisorSendChInterface.(chan types.InternalIOCalculationResult)
+		return NewIOServer(advisorSendCh, advisorRecvCh, conf, metaCache, metaServer, emitter)
 	default:
 		return nil, fmt.Errorf("illegal resource %v", resourceName)
 	}
