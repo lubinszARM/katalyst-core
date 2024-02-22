@@ -14,18 +14,29 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package global
+package types
 
-type QRMAdvisorConfiguration struct {
-	CPUAdvisorSocketAbsPath string
-	CPUPluginSocketAbsPath  string
+import (
+	"time"
+)
 
-	MemoryAdvisorSocketAbsPath string
-	MemoryPluginSocketAbsPath  string
+type IOAdvisorPluginName string
 
-	IOAdvisorSocketAbsPath string
+// IOProvisionPolicyName defines policy names for io advisor resource provision
+type IOProvisionPolicyName string
+
+const (
+	IOProvisionPolicyNone      IOProvisionPolicyName = "none"
+	IOProvisionPolicyCanonical IOProvisionPolicyName = "canonical"
+)
+
+type ContainerIOAdvices struct {
+	PodUID        string
+	ContainerName string
+	Values        map[string]string
 }
 
-func NewQRMAdvisorConfiguration() *QRMAdvisorConfiguration {
-	return &QRMAdvisorConfiguration{}
+type InternalIOCalculationResult struct {
+	ContainerEntries []ContainerIOAdvices
+	TimeStamp        time.Time
 }
