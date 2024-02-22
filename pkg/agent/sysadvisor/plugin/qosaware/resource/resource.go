@@ -25,6 +25,7 @@ import (
 
 	"github.com/kubewharf/katalyst-core/pkg/agent/sysadvisor/metacache"
 	"github.com/kubewharf/katalyst-core/pkg/agent/sysadvisor/plugin/qosaware/resource/cpu"
+	"github.com/kubewharf/katalyst-core/pkg/agent/sysadvisor/plugin/qosaware/resource/io"
 	"github.com/kubewharf/katalyst-core/pkg/agent/sysadvisor/plugin/qosaware/resource/memory"
 	"github.com/kubewharf/katalyst-core/pkg/agent/sysadvisor/types"
 	"github.com/kubewharf/katalyst-core/pkg/config"
@@ -92,6 +93,8 @@ func NewSubResourceAdvisor(resourceName types.QoSResourceName, conf *config.Conf
 		return cpu.NewCPUResourceAdvisor(conf, extraConf, metaCache, metaServer, emitter), nil
 	case types.QoSResourceMemory:
 		return memory.NewMemoryResourceAdvisor(conf, extraConf, metaCache, metaServer, emitter), nil
+	case types.QoSResourceIO:
+		return io.NewIOResourceAdvisor(conf, extraConf, metaCache, metaServer, emitter), nil
 	default:
 		return nil, fmt.Errorf("try to new sub resource advisor for unsupported resource %v", resourceName)
 	}

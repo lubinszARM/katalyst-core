@@ -36,6 +36,7 @@ type QoSResourceName string
 const (
 	QoSResourceCPU    QoSResourceName = "cpu"
 	QoSResourceMemory QoSResourceName = "memory"
+	QoSResourceIO     QoSResourceName = "storage"
 )
 
 // ContainerInfo contains container information for sysadvisor plugins
@@ -54,6 +55,7 @@ type ContainerInfo struct {
 	CPULimit            float64
 	MemoryRequest       float64
 	MemoryLimit         float64
+	IOWeight            float64
 	OriginOwnerPoolName string
 
 	// Allocation information changing by list and watch (and
