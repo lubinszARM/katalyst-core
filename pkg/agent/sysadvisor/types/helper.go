@@ -56,6 +56,7 @@ func (ci *ContainerInfo) Clone() *ContainerInfo {
 		CPULimit:                         ci.CPULimit,
 		MemoryRequest:                    ci.MemoryRequest,
 		MemoryLimit:                      ci.MemoryLimit,
+		IOWeight:                         ci.IOWeight,
 		RampUp:                           ci.RampUp,
 		OriginOwnerPoolName:              ci.OriginOwnerPoolName,
 		OwnerPoolName:                    ci.OwnerPoolName,

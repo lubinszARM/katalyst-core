@@ -18,6 +18,7 @@ package resource
 
 import (
 	"github.com/kubewharf/katalyst-core/pkg/config/agent/sysadvisor/qosaware/resource/cpu"
+	"github.com/kubewharf/katalyst-core/pkg/config/agent/sysadvisor/qosaware/resource/io"
 	"github.com/kubewharf/katalyst-core/pkg/config/agent/sysadvisor/qosaware/resource/memory"
 )
 
@@ -27,6 +28,7 @@ type ResourceAdvisorConfiguration struct {
 
 	*cpu.CPUAdvisorConfiguration
 	*memory.MemoryAdvisorConfiguration
+	*io.IOAdvisorConfiguration
 }
 
 // NewResourceAdvisorConfiguration creates new resource advisor configurations
@@ -35,5 +37,6 @@ func NewResourceAdvisorConfiguration() *ResourceAdvisorConfiguration {
 		ResourceAdvisors:           []string{},
 		CPUAdvisorConfiguration:    cpu.NewCPUAdvisorConfiguration(),
 		MemoryAdvisorConfiguration: memory.NewMemoryAdvisorConfiguration(),
+		IOAdvisorConfiguration:     io.NewIOAdvisorConfiguration(),
 	}
 }

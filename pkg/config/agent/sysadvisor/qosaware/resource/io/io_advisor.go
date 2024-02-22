@@ -14,18 +14,20 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package global
+package io
 
-type QRMAdvisorConfiguration struct {
-	CPUAdvisorSocketAbsPath string
-	CPUPluginSocketAbsPath  string
+import (
+	"github.com/kubewharf/katalyst-core/pkg/agent/sysadvisor/types"
+)
 
-	MemoryAdvisorSocketAbsPath string
-	MemoryPluginSocketAbsPath  string
-
-	IOAdvisorSocketAbsPath string
+// IOAdvisorConfiguration stores configurations of io advisors in qos aware plugin
+type IOAdvisorConfiguration struct {
+	IOAdvisorPlugins []types.IOAdvisorPluginName
 }
 
-func NewQRMAdvisorConfiguration() *QRMAdvisorConfiguration {
-	return &QRMAdvisorConfiguration{}
+// NewIOAdvisorConfiguration creates new io advisor configurations
+func NewIOAdvisorConfiguration() *IOAdvisorConfiguration {
+	return &IOAdvisorConfiguration{
+		IOAdvisorPlugins: make([]types.IOAdvisorPluginName, 0),
+	}
 }
