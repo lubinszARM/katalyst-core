@@ -72,7 +72,6 @@ func setExtraControlKnobByConfigForAllocationInfo(allocationInfo *state.Allocati
 	}
 
 	for controlKnobName, configEntry := range extraControlKnobConfigs {
-
 		if _, found := allocationInfo.ExtraControlKnobInfo[controlKnobName]; found {
 			continue
 		}
@@ -149,6 +148,35 @@ func (p *DynamicPolicy) setExtraControlKnobByConfigs() {
 	p.state.SetMachineState(resourcesMachineState)
 }
 
+func getUserSpecifiedMemorySoftLimitInBytes(podUID, containerID, controlKnobValue string) string {
+	relCgroupPath, err := common.GetContainerRelativeCgroupPath(podUID, containerID)
+	if err != nil {
+		general.Warningf("getUserSpecifiedMemorySoftLimitInBytes failed with err: %v", err)
+		return "0"
+	}
+
+	memStat, err := cgroupmgr.GetMemoryWithRelativePath(relCgroupPath)
+	if err != nil {
+		general.Warningf("getUserSpecifiedMemorySoftLimitInBytes failed with err: %v", err)
+		return "0"
+	}
+
+	softLimitRatio, err := strconv.Atoi(controlKnobValue)
+	if err != nil {
+		general.Warningf("getUserSpecifiedMemorySoftLimitInBytes failed with err: %v", err)
+		return "0"
+	}
+
+	// memory.low = memory.max * softLimitRatio
+	newSoftLimit := memStat.Limit / 100 * uint64(softLimitRatio)
+	// the value should be align with page size
+	newSoftLimit = general.AlignToPageSize(newSoftLimit)
+	// memory.low was limited in {128M, 2G}
+	newSoftLimit = uint64(general.Clamp(float64(newSoftLimit), float64(cgroupMemoryLimit128M), float64(cgroupMemoryLimit2G)))
+	fmt.Printf("BBLU456 got %v:%v..\n", memStat.Limit, newSoftLimit)
+	return strconv.FormatUint(newSoftLimit, 10)
+}
+
 func (p *DynamicPolicy) applyExternalCgroupParams() {
 	general.Infof("called")
 
@@ -187,6 +215,12 @@ func (p *DynamicPolicy) applyExternalCgroupParams() {
 					continue
 				}
 
+				// Notice: for some memory cgroup configurations, we need to convert the ratio configuration into bytes.
+				// Such as: memory.low, memory.min.
+				if controlKnobName == controlKnobKeyMemorySoftLimitInRatio {
+					entry.ControlKnobValue = getUserSpecifiedMemorySoftLimitInBytes(podUID, containerID, entry.ControlKnobValue)
+				}
+
 				general.InfoS("ApplyUnifiedDataForContainer",
 					"podNamespace", allocationInfo.PodNamespace,
 					"podName", allocationInfo.PodName,
@@ -197,7 +231,6 @@ func (p *DynamicPolicy) applyExternalCgroupParams() {
 					"cgroupIfaceName", cgroupIfaceName)
 
 				err := cgroupmgr.ApplyUnifiedDataForContainer(podUID, containerID, entry.CgroupSubsysName, cgroupIfaceName, entry.ControlKnobValue)
-
 				if err != nil {
 					general.ErrorS(err, "ApplyUnifiedDataForContainer failed",
 						"podNamespace", allocationInfo.PodNamespace,
