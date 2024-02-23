@@ -50,6 +50,7 @@ type ExtraControlKnobConfigs map[string]ExtraControlKnobConfig
 
 type ExtraControlKnobConfig struct {
 	PodExplicitlyAnnotationKey string            `json:"pod_explicitly_annotation_key"`
+	QoSLevelToDefaultFactor    bool              `json:"qos_level_to_default_factor"`
 	QoSLevelToDefaultValue     map[string]string `json:"qos_level_to_default_value"`
 	ControlKnobInfo            `json:"control_knob_info"`
 }
