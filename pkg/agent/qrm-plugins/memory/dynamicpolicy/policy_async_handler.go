@@ -72,7 +72,7 @@ func setExtraControlKnobByConfigForAllocationInfo(allocationInfo *state.Allocati
 	}
 
 	for controlKnobName, configEntry := range extraControlKnobConfigs {
-
+		//default
 		if _, found := allocationInfo.ExtraControlKnobInfo[controlKnobName]; found {
 			continue
 		}
@@ -83,6 +83,18 @@ func setExtraControlKnobByConfigForAllocationInfo(allocationInfo *state.Allocati
 			configEntry.PodExplicitlyAnnotationKey != "" {
 			clonedControlKnobInfo.ControlKnobValue = specifiedValue
 		} else if qosLevelDefaultValue, ok := configEntry.QoSLevelToDefaultValue[allocationInfo.QoSLevel]; ok {
+			/*			if controlKnobName == "memory_limit_in_factor" {
+							for key, value := range qosLevelDefaultValue {
+								fmt.Printf("BBLU key=%v, value=%v..\n", key, value)
+							}
+							numberAsString := strconv.Itoa(1234)
+
+							byteArray := []byte(numberAsString)
+							//	for key := range qosLevelDefaultValue {
+							//		qosLevelDefaultValue[key] = byteArray
+							//	}
+						}
+			*/
 			clonedControlKnobInfo.ControlKnobValue = qosLevelDefaultValue
 		}
 
@@ -187,6 +199,28 @@ func (p *DynamicPolicy) applyExternalCgroupParams() {
 					continue
 				}
 
+				// convert ratio into bytes.
+				if controlKnobName == "memory_softlimit_in_ratio" {
+					relCgroupPath, err := common.GetContainerRelativeCgroupPath(podUID, containerID)
+					if err != nil {
+						entry.ControlKnobValue = "0"
+					}
+
+					memStat, err := cgroupmgr.GetMemoryWithRelativePath(relCgroupPath)
+					if err != nil {
+						entry.ControlKnobValue = "0"
+					}
+					fmt.Printf("BBLU got mem max:%v..\n", memStat.Limit)
+					//strconv.ParseUint(field, 10, 64)
+					//softLimitRatio := strconv.ParseUint(entry.ControlKnobValue, 10, 64)
+					softLimitRatio, err := strconv.Atoi(entry.ControlKnobValue)
+					if err != nil {
+						fmt.Printf("BBLU err:%v\n", err)
+						softLimitRatio = 0
+					}
+					newSoftLimit := memStat.Limit / 100 * uint64(softLimitRatio)
+					entry.ControlKnobValue = string(newSoftLimit)
+				}
 				general.InfoS("ApplyUnifiedDataForContainer",
 					"podNamespace", allocationInfo.PodNamespace,
 					"podName", allocationInfo.PodName,
@@ -197,7 +231,6 @@ func (p *DynamicPolicy) applyExternalCgroupParams() {
 					"cgroupIfaceName", cgroupIfaceName)
 
 				err := cgroupmgr.ApplyUnifiedDataForContainer(podUID, containerID, entry.CgroupSubsysName, cgroupIfaceName, entry.ControlKnobValue)
-
 				if err != nil {
 					general.ErrorS(err, "ApplyUnifiedDataForContainer failed",
 						"podNamespace", allocationInfo.PodNamespace,
