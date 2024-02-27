@@ -28,10 +28,12 @@ import (
 	"github.com/kubewharf/katalyst-api/pkg/consts"
 	"github.com/kubewharf/katalyst-core/cmd/katalyst-agent/app/agent"
 	"github.com/kubewharf/katalyst-core/cmd/katalyst-agent/app/agent/qrm"
+	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/commonstate"
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/io/handlers/dirtymem"
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/util"
 	"github.com/kubewharf/katalyst-core/pkg/agent/utilcomponent/periodicalhandler"
 	"github.com/kubewharf/katalyst-core/pkg/config"
+	"github.com/kubewharf/katalyst-core/pkg/config/generic"
 	"github.com/kubewharf/katalyst-core/pkg/metaserver"
 	"github.com/kubewharf/katalyst-core/pkg/metrics"
 	"github.com/kubewharf/katalyst-core/pkg/util/general"
@@ -42,16 +44,26 @@ const (
 	IOResourcePluginPolicyNameDynamic = string(consts.ResourcePluginPolicyNameDynamic)
 )
 
+const (
+	applyCgroupPeriod          = 15 * time.Second
+	setExtraControlKnobsPeriod = 15 * time.Second
+)
+
 // DynamicPolicy is the dynamic io policy
 type DynamicPolicy struct {
-	sync.Mutex
+	sync.RWMutex
 
-	name       string
-	stopCh     chan struct{}
-	started    bool
+	name                    string
+	stopCh                  chan struct{}
+	started                 bool
+	qosConfig               *generic.QoSConfiguration
+	extraControlKnobConfigs commonstate.ExtraControlKnobConfigs
+
 	emitter    metrics.MetricEmitter
 	metaServer *metaserver.MetaServer
 	agentCtx   *agent.GenericContext
+
+	//	state state.State
 
 	enableSettingWBT bool
 }
@@ -64,13 +76,25 @@ func NewDynamicPolicy(agentCtx *agent.GenericContext, conf *config.Configuration
 		Val: IOResourcePluginPolicyNameDynamic,
 	})
 
+	extraControlKnobConfigs := make(commonstate.ExtraControlKnobConfigs)
+	var err error
+	if len(conf.ExtraControlKnobConfigFile) > 0 {
+		extraControlKnobConfigs, err = commonstate.LoadExtraControlKnobConfigs(conf.ExtraControlKnobConfigFile)
+		if err != nil {
+			return false, agent.ComponentStub{}, fmt.Errorf("loadExtraControlKnobConfigs failed with error: %v", err)
+		}
+	} else {
+		general.Infof("empty ExtraControlKnobConfigFile, initialize empty extraControlKnobConfigs")
+	}
+
 	policyImplement := &DynamicPolicy{
-		emitter:          wrappedEmitter,
-		metaServer:       agentCtx.MetaServer,
-		agentCtx:         agentCtx,
-		stopCh:           make(chan struct{}),
-		name:             fmt.Sprintf("%s_%s", agentName, IOResourcePluginPolicyNameDynamic),
-		enableSettingWBT: conf.EnableSettingWBT,
+		emitter:                 wrappedEmitter,
+		metaServer:              agentCtx.MetaServer,
+		agentCtx:                agentCtx,
+		stopCh:                  make(chan struct{}),
+		name:                    fmt.Sprintf("%s_%s", agentName, IOResourcePluginPolicyNameDynamic),
+		enableSettingWBT:        conf.EnableSettingWBT,
+		extraControlKnobConfigs: extraControlKnobConfigs,
 	}
 
 	// todo: currently there is no resource needed to be topology-aware and synchronously allocated in this plugin,
@@ -105,6 +129,8 @@ func (p *DynamicPolicy) Start() (err error) {
 	go wait.Until(func() {
 		_ = p.emitter.StoreInt64(util.MetricNameHeartBeat, 1, metrics.MetricTypeNameRaw)
 	}, time.Second*30, p.stopCh)
+	go wait.Until(p.applyExternalCgroupParams, applyCgroupPeriod, p.stopCh)
+	go wait.Until(p.setExtraControlKnobByConfigs, setExtraControlKnobsPeriod, p.stopCh)
 
 	if p.enableSettingWBT {
 		general.Infof("setWBT enabled")
@@ -173,7 +199,49 @@ func (p *DynamicPolicy) RemovePod(_ context.Context,
 
 // GetResourcesAllocation returns allocation results of corresponding resources
 func (p *DynamicPolicy) GetResourcesAllocation(_ context.Context,
-	_ *pluginapi.GetResourcesAllocationRequest) (*pluginapi.GetResourcesAllocationResponse, error) {
+	req *pluginapi.GetResourcesAllocationRequest) (*pluginapi.GetResourcesAllocationResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("GetResourcesAllocation got nil req")
+	}
+	/*
+	   p.RLock()
+	   defer p.RUnlock()
+
+	   podResources := make(map[string]*pluginapi.ContainerResources)
+	   podEntries := p.state.GetPodResourceEntries()[v1.ResourceStorage]
+
+	   	for podUID, containerEntries := range podEntries {
+	   		if podResources[podUID] == nil {
+	   			podResources[podUID] = &pluginapi.ContainerResources{}
+	   		}
+
+	   		for containerName, allocationInfo := range containerEntries {
+	   			if allocationInfo == nil {
+	   				continue
+	   			}
+
+	   			if podResources[podUID].ContainerResources == nil {
+	   				podResources[podUID].ContainerResources = make(map[string]*pluginapi.ResourceAllocation)
+	   			}
+
+	   			var err error
+	   			podResources[podUID].ContainerResources[containerName], err = allocationInfo.GetResourceAllocation()
+
+	   			if err != nil {
+	   				errMsg := "allocationInfo.GetResourceAllocation failed"
+	   				general.ErrorS(err, errMsg,
+	   					"podNamespace", allocationInfo.PodNamespace,
+	   					"podName", allocationInfo.PodName,
+	   					"containerName", allocationInfo.ContainerName)
+	   				return nil, fmt.Errorf(errMsg)
+	   			}
+	   		}
+	   	}
+
+	   	return &pluginapi.GetResourcesAllocationResponse{
+	   		PodResources: podResources,
+	   	}, nil
+	*/
 	return &pluginapi.GetResourcesAllocationResponse{}, nil
 }
 
