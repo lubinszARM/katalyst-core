@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package staticpolicy
+package dynamicpolicy
 
 import (
 	"context"
@@ -38,12 +38,12 @@ import (
 )
 
 const (
-	// IOResourcePluginPolicyNameStatic is the policy name of static io resource plugin
-	IOResourcePluginPolicyNameStatic = string(consts.ResourcePluginPolicyNameStatic)
+	// IOResourcePluginPolicyNameDynamic is the policy name of dynamic io resource plugin
+	IOResourcePluginPolicyNameDynamic = string(consts.ResourcePluginPolicyNameDynamic)
 )
 
-// StaticPolicy is the static io policy
-type StaticPolicy struct {
+// DynamicPolicy is the dynamic io policy
+type DynamicPolicy struct {
 	sync.Mutex
 
 	name       string
@@ -56,20 +56,20 @@ type StaticPolicy struct {
 	enableSettingWBT bool
 }
 
-// NewStaticPolicy returns a static io policy
-func NewStaticPolicy(agentCtx *agent.GenericContext, conf *config.Configuration,
+// NewDynamicPolicy returns a dynamic io policy
+func NewDynamicPolicy(agentCtx *agent.GenericContext, conf *config.Configuration,
 	_ interface{}, agentName string) (bool, agent.Component, error) {
 	wrappedEmitter := agentCtx.EmitterPool.GetDefaultMetricsEmitter().WithTags(agentName, metrics.MetricTag{
 		Key: util.QRMPluginPolicyTagName,
-		Val: IOResourcePluginPolicyNameStatic,
+		Val: IOResourcePluginPolicyNameDynamic,
 	})
 
-	policyImplement := &StaticPolicy{
+	policyImplement := &DynamicPolicy{
 		emitter:          wrappedEmitter,
 		metaServer:       agentCtx.MetaServer,
 		agentCtx:         agentCtx,
 		stopCh:           make(chan struct{}),
-		name:             fmt.Sprintf("%s_%s", agentName, IOResourcePluginPolicyNameStatic),
+		name:             fmt.Sprintf("%s_%s", agentName, IOResourcePluginPolicyNameDynamic),
 		enableSettingWBT: conf.EnableSettingWBT,
 	}
 
@@ -80,7 +80,7 @@ func NewStaticPolicy(agentCtx *agent.GenericContext, conf *config.Configuration,
 }
 
 // Start starts this plugin
-func (p *StaticPolicy) Start() (err error) {
+func (p *DynamicPolicy) Start() (err error) {
 	general.Infof("called")
 
 	p.Lock()
@@ -122,7 +122,7 @@ func (p *StaticPolicy) Start() (err error) {
 }
 
 // Stop stops this plugin
-func (p *StaticPolicy) Stop() error {
+func (p *DynamicPolicy) Stop() error {
 	p.Lock()
 	defer func() {
 		p.started = false
@@ -142,18 +142,18 @@ func (p *StaticPolicy) Stop() error {
 }
 
 // Name returns the name of this plugin
-func (p *StaticPolicy) Name() string {
+func (p *DynamicPolicy) Name() string {
 	return p.name
 }
 
 // ResourceName returns resource names managed by this plugin
-func (p *StaticPolicy) ResourceName() string {
+func (p *DynamicPolicy) ResourceName() string {
 	// todo: return correct value when there is resource needed to be topology-aware and synchronously allocated in this plugin
 	return ""
 }
 
 // GetTopologyHints returns hints of corresponding resources
-func (p *StaticPolicy) GetTopologyHints(_ context.Context,
+func (p *DynamicPolicy) GetTopologyHints(_ context.Context,
 	req *pluginapi.ResourceRequest) (resp *pluginapi.ResourceHintsResponse, err error) {
 	if req == nil {
 		return nil, fmt.Errorf("GetTopologyHints got nil req")
@@ -162,7 +162,7 @@ func (p *StaticPolicy) GetTopologyHints(_ context.Context,
 	return util.PackResourceHintsResponse(req, p.ResourceName(), nil)
 }
 
-func (p *StaticPolicy) RemovePod(_ context.Context,
+func (p *DynamicPolicy) RemovePod(_ context.Context,
 	req *pluginapi.RemovePodRequest) (*pluginapi.RemovePodResponse, error) {
 	if req == nil {
 		return nil, fmt.Errorf("RemovePod got nil req")
@@ -172,25 +172,25 @@ func (p *StaticPolicy) RemovePod(_ context.Context,
 }
 
 // GetResourcesAllocation returns allocation results of corresponding resources
-func (p *StaticPolicy) GetResourcesAllocation(_ context.Context,
+func (p *DynamicPolicy) GetResourcesAllocation(_ context.Context,
 	_ *pluginapi.GetResourcesAllocationRequest) (*pluginapi.GetResourcesAllocationResponse, error) {
 	return &pluginapi.GetResourcesAllocationResponse{}, nil
 }
 
 // GetTopologyAwareResources returns allocation results of corresponding resources as topology aware format
-func (p *StaticPolicy) GetTopologyAwareResources(_ context.Context,
+func (p *DynamicPolicy) GetTopologyAwareResources(_ context.Context,
 	_ *pluginapi.GetTopologyAwareResourcesRequest) (*pluginapi.GetTopologyAwareResourcesResponse, error) {
 	return &pluginapi.GetTopologyAwareResourcesResponse{}, nil
 }
 
 // GetTopologyAwareAllocatableResources returns corresponding allocatable resources as topology aware format
-func (p *StaticPolicy) GetTopologyAwareAllocatableResources(_ context.Context,
+func (p *DynamicPolicy) GetTopologyAwareAllocatableResources(_ context.Context,
 	_ *pluginapi.GetTopologyAwareAllocatableResourcesRequest) (*pluginapi.GetTopologyAwareAllocatableResourcesResponse, error) {
 	return &pluginapi.GetTopologyAwareAllocatableResourcesResponse{}, nil
 }
 
 // GetResourcePluginOptions returns options to be communicated with Resource Manager
-func (p *StaticPolicy) GetResourcePluginOptions(context.Context,
+func (p *DynamicPolicy) GetResourcePluginOptions(context.Context,
 	*pluginapi.Empty) (*pluginapi.ResourcePluginOptions, error) {
 	return &pluginapi.ResourcePluginOptions{
 		PreStartRequired:      false,
@@ -202,7 +202,7 @@ func (p *StaticPolicy) GetResourcePluginOptions(context.Context,
 // Allocate is called during pod admit so that the resource
 // plugin can allocate corresponding resource for the container
 // according to resource request
-func (p *StaticPolicy) Allocate(_ context.Context,
+func (p *DynamicPolicy) Allocate(_ context.Context,
 	req *pluginapi.ResourceRequest) (resp *pluginapi.ResourceAllocationResponse, err error) {
 	if req == nil {
 		return nil, fmt.Errorf("GetTopologyHints got nil req")
@@ -226,7 +226,7 @@ func (p *StaticPolicy) Allocate(_ context.Context,
 // PreStartContainer is called, if indicated by resource plugin during registration phase,
 // before each container start. Resource plugin can run resource specific operations
 // such as resetting the resource before making resources available to the container
-func (p *StaticPolicy) PreStartContainer(context.Context,
+func (p *DynamicPolicy) PreStartContainer(context.Context,
 	*pluginapi.PreStartContainerRequest) (*pluginapi.PreStartContainerResponse, error) {
 	return &pluginapi.PreStartContainerResponse{}, nil
 }
