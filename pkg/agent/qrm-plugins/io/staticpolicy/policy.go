@@ -32,6 +32,7 @@ import (
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/util"
 	"github.com/kubewharf/katalyst-core/pkg/agent/utilcomponent/periodicalhandler"
 	"github.com/kubewharf/katalyst-core/pkg/config"
+	"github.com/kubewharf/katalyst-core/pkg/config/generic"
 	"github.com/kubewharf/katalyst-core/pkg/metaserver"
 	"github.com/kubewharf/katalyst-core/pkg/metrics"
 	"github.com/kubewharf/katalyst-core/pkg/util/general"
@@ -46,9 +47,11 @@ const (
 type StaticPolicy struct {
 	sync.Mutex
 
-	name       string
-	stopCh     chan struct{}
-	started    bool
+	name      string
+	stopCh    chan struct{}
+	started   bool
+	qosConfig *generic.QoSConfiguration
+
 	emitter    metrics.MetricEmitter
 	metaServer *metaserver.MetaServer
 	agentCtx   *agent.GenericContext
@@ -70,6 +73,7 @@ func NewStaticPolicy(agentCtx *agent.GenericContext, conf *config.Configuration,
 		agentCtx:         agentCtx,
 		stopCh:           make(chan struct{}),
 		name:             fmt.Sprintf("%s_%s", agentName, IOResourcePluginPolicyNameStatic),
+		qosConfig:        conf.QoSConfiguration,
 		enableSettingWBT: conf.EnableSettingWBT,
 	}
 
@@ -105,6 +109,13 @@ func (p *StaticPolicy) Start() (err error) {
 	go wait.Until(func() {
 		_ = p.emitter.StoreInt64(util.MetricNameHeartBeat, 1, metrics.MetricTypeNameRaw)
 	}, time.Second*30, p.stopCh)
+
+	// go wait.Until(p.applyExternalCgroupParams, time.Second*30, p.stopCh)
+	err = periodicalhandler.RegisterPeriodicalHandler(qrm.QRMIOPluginPeriodicalHandlerGroupName,
+		"syncIOWeight", p.syncIOWeight, 30*time.Second)
+	if err != nil {
+		general.Infof("register syncIOWeight failed, err=%v", err)
+	}
 
 	if p.enableSettingWBT {
 		general.Infof("setWBT enabled")
