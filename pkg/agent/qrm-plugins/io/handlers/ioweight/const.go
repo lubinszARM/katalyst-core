@@ -14,27 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package qrm
+package ioweight
 
-type IOQRMPluginConfig struct {
-	// PolicyName is used to switch between several strategies
-	PolicyName string
+const EnableSetIOWeightPeriodicalHandlerName = "SetIOWeight"
 
-	WritebackThrottlingOption
-	IOWeightOption
-}
-
-type WritebackThrottlingOption struct {
-	EnableSettingWBT bool
-	WBTValueHDD      int
-	WBTValueSSD      int
-}
-
-type IOWeightOption struct {
-	EnableSettingIOWeight      bool
-	IOWeightQoSLevelConfigFile string
-}
-
-func NewIOQRMPluginConfig() *IOQRMPluginConfig {
-	return &IOQRMPluginConfig{}
-}
+const (
+	metricNameIOWeight = "async_handler_io_weight"
+)
