@@ -1,3 +1,6 @@
+//go:build linux
+// +build linux
+
 /*
 Copyright 2022 The Katalyst Authors.
 
@@ -14,26 +17,23 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package qrm
+package ioweight
 
-type IOQRMPluginConfig struct {
-	// PolicyName is used to switch between several strategies
-	PolicyName string
+import (
+	"fmt"
 
-	WritebackThrottlingOption
-	IOWeightOption
-}
+	v1 "k8s.io/api/core/v1"
 
-type WritebackThrottlingOption struct {
-	EnableSettingWBT bool
-	WBTValueHDD      int
-	WBTValueSSD      int
-}
+	"github.com/kubewharf/katalyst-core/pkg/config/generic"
+)
 
-type IOWeightOption struct {
-	EnableSettingIOWeight bool
-}
+func GetQoS(qosConfig *generic.QoSConfiguration, pod *v1.Pod) {
+	qosLevel, err := qosConfig.GetQoSLevelForPod(pod)
+	if err != nil {
+		fmt.Printf("BBLU111 failed:%v..\n", err)
+		return
+	}
 
-func NewIOQRMPluginConfig() *IOQRMPluginConfig {
-	return &IOQRMPluginConfig{}
+	fmt.Printf("BBLU222 got qos:%v, pod=%v\n", qosLevel, string(pod.UID))
+	return
 }
