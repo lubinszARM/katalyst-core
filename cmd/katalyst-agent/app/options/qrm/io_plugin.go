@@ -28,12 +28,18 @@ type IOOptions struct {
 	WritebackThrottlingOption // option for writeback throttling, it determin the recycling speed of dirty memory.
 	// TO-DO
 	//DirtyThrottlingOption // option for dirty throttling, it determin the global watermark of dirty memory.
+	IOWeightOption
 }
 
 type WritebackThrottlingOption struct {
 	EnableSettingWBT bool
 	WBTValueHDD      int
 	WBTValueSSD      int
+}
+
+type IOWeightOption struct {
+	EnableSettingIOWeight      bool
+	IOWeightQoSLevelConfigFile string
 }
 
 func NewIOOptions() *IOOptions {
@@ -43,6 +49,10 @@ func NewIOOptions() *IOOptions {
 			EnableSettingWBT: false,
 			WBTValueHDD:      75000,
 			WBTValueSSD:      2000,
+		},
+		IOWeightOption: IOWeightOption{
+			EnableSettingIOWeight:      false,
+			IOWeightQoSLevelConfigFile: "",
 		},
 	}
 }
@@ -58,6 +68,10 @@ func (o *IOOptions) AddFlags(fss *cliflag.NamedFlagSets) {
 		o.WBTValueHDD, "writeback throttling value for HDD")
 	fs.IntVar(&o.WBTValueSSD, "disk-wbt-ssd",
 		o.WBTValueSSD, "writeback throttling value for SSD")
+	fs.BoolVar(&o.EnableSettingIOWeight, "enable-io-weight",
+		o.EnableSettingIOWeight, "if set it to true, io.weight related control operations will be executed")
+	fs.StringVar(&o.IOWeightQoSLevelConfigFile, "io-weight-qos-config-file",
+		o.IOWeightQoSLevelConfigFile, "the absolute path of io.weight qos config file")
 }
 
 func (o *IOOptions) ApplyTo(conf *qrmconfig.IOQRMPluginConfig) error {
@@ -65,5 +79,7 @@ func (o *IOOptions) ApplyTo(conf *qrmconfig.IOQRMPluginConfig) error {
 	conf.EnableSettingWBT = o.EnableSettingWBT
 	conf.WBTValueHDD = o.WBTValueHDD
 	conf.WBTValueSSD = o.WBTValueSSD
+	conf.EnableSettingIOWeight = o.EnableSettingIOWeight
+	conf.IOWeightQoSLevelConfigFile = o.IOWeightQoSLevelConfigFile
 	return nil
 }
