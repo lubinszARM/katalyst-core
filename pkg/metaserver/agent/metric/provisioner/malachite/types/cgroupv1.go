@@ -109,6 +109,7 @@ type MemoryCgDataV1 struct {
 	TotalPgfault              uint64        `json:"total_pgfault"`
 	TotalPgmajfault           uint64        `json:"total_pgmajfault"`
 	TotalAllocstall           uint64        `json:"total_allocstall"`
+	TotalInactiveFile         uint64        `json:"total_inactive_file"`
 	WatermarkScaleFactor      interface{}   `json:"watermark_scale_factor"`
 	BpfMemStat                BpfMemData    `json:"bpf_mem_data"`
 	NumaStats                 []NumaStatsV1 `json:"numa_stat"`
