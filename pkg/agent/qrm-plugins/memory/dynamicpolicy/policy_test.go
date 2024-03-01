@@ -902,6 +902,7 @@ func TestAllocate(t *testing.T) {
 		}
 
 		dynamicPolicy.enableMemoryAdvisor = true
+		dynamicPolicy.enableSettingMemProtection = true
 		dynamicPolicy.advisorClient = advisorsvc.NewStubAdvisorServiceClient()
 
 		resp, err := dynamicPolicy.Allocate(context.Background(), tc.req)
