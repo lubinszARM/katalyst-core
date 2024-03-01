@@ -147,14 +147,15 @@ const (
 
 // container memory metrics
 const (
-	MetricMemLimitContainer     = "mem.limit.container"
-	MetricMemTCPLimitContainer  = "mem.tcp.limit.container"
-	MetricMemUsageContainer     = "mem.usage.container"
-	MetricMemUsageUserContainer = "mem.usage.user.container"
-	MetricMemUsageKernContainer = "mem.usage.kern.container"
-	MetricMemRssContainer       = "mem.rss.container"
-	MetricMemCacheContainer     = "mem.cache.container"
-	MetricMemShmemContainer     = "mem.shmem.container"
+	MetricMemLimitContainer        = "mem.limit.container"
+	MetricMemTCPLimitContainer     = "mem.tcp.limit.container"
+	MetricMemUsageContainer        = "mem.usage.container"
+	MetricMemUsageUserContainer    = "mem.usage.user.container"
+	MetricMemUsageKernContainer    = "mem.usage.kern.container"
+	MetricMemRssContainer          = "mem.rss.container"
+	MetricMemCacheContainer        = "mem.cache.container"
+	MetricMemShmemContainer        = "mem.shmem.container"
+	MetricMemFileInactiveContainer = "mem.file.inactive.container"
 
 	MetricMemDirtyContainer       = "mem.dirty.container"
 	MetricMemWritebackContainer   = "mem.writeback.container"
