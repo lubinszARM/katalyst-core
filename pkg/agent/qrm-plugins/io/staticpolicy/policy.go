@@ -114,7 +114,7 @@ func (p *StaticPolicy) Start() (err error) {
 	}, time.Second*30, p.stopCh)
 
 	if p.enableSettingIOWeight {
-		err = periodicalhandler.RegisterPeriodicalHandler(qrm.QRMIOPluginPeriodicalHandlerGroupName,
+		err = periodicalhandler.RegisterPeriodicalHandler(qrm.QRMMemoryPluginPeriodicalHandlerGroupName,
 			ioweight.EnableSetIOWeightPeriodicalHandlerName, ioweight.IOWeightTaskFunc, 30*time.Second)
 		if err != nil {
 			general.Infof("register syncIOWeight failed, err=%v", err)

@@ -21,6 +21,8 @@ package ioweight
 
 import (
 	"context"
+	"fmt"
+	"sync"
 
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/commonstate"
 	coreconfig "github.com/kubewharf/katalyst-core/pkg/config"
@@ -28,10 +30,40 @@ import (
 	"github.com/kubewharf/katalyst-core/pkg/metaserver"
 	"github.com/kubewharf/katalyst-core/pkg/metrics"
 	"github.com/kubewharf/katalyst-core/pkg/util/cgroup/common"
+	cgroupcm "github.com/kubewharf/katalyst-core/pkg/util/cgroup/common"
 	cgroupmgr "github.com/kubewharf/katalyst-core/pkg/util/cgroup/manager"
 	"github.com/kubewharf/katalyst-core/pkg/util/general"
 	"github.com/kubewharf/katalyst-core/pkg/util/native"
 )
+
+var (
+	initializeOnce sync.Once
+)
+
+func applyIOWeightCgroupLevelConfig(conf *coreconfig.Configuration) {
+	if conf.IOWeightCgroupLevelConfigFile == "" {
+		general.Errorf("IOWeightCgroupLevelConfigFile isn't configured")
+		return
+	}
+
+	ioWightCgroupLevelConfigs := make(map[string]uint64)
+	err := general.LoadJsonConfig(conf.IOWeightCgroupLevelConfigFile, &ioWightCgroupLevelConfigs)
+	if err != nil {
+		general.Errorf("load IOWeightCgroupLevelConfig failed with error: %v", err)
+		return
+	}
+
+	for relativeCgPath, weight := range ioWightCgroupLevelConfigs {
+		err := cgroupmgr.ApplyIOWeightWithRelativePath(relativeCgPath, defaultDevID, weight)
+		if err != nil {
+			general.Errorf("ApplyIOWeightWithRelativePath for devID: %s in relativeCgPath: %s failed with error: %v",
+				defaultDevID, relativeCgPath, err)
+		} else {
+			general.Infof("ApplyIOWeightWithRelativePath for devID: %s, weight: %d in relativeCgPath: %s successfully",
+				defaultDevID, weight, relativeCgPath)
+		}
+	}
+}
 
 func applyIOWeightQoSLevelConfig(conf *coreconfig.Configuration,
 	emitter metrics.MetricEmitter, metaServer *metaserver.MetaServer) {
@@ -68,9 +100,11 @@ func applyIOWeightQoSLevelConfig(conf *coreconfig.Configuration,
 			general.Warningf("no QoSLevelToDefaultValue in extraControlKnobConfigs")
 			continue
 		}
-
+		fmt.Printf("BBLU123 got:%v..\n", qosLevelDefaultValue)
 		for _, containerStatus := range pod.Status.ContainerStatuses {
 			podUID, containerID := string(pod.UID), native.TrimContainerIDPrefix(containerStatus.ContainerID)
+			relCgPath, _ := cgroupcm.GetContainerRelativeCgroupPath(podUID, containerID)
+			fmt.Printf("BBLU222: cgpath=%v, qos=%v..\n", relCgPath, qosLevelDefaultValue)
 			err := cgroupmgr.ApplyUnifiedDataForContainer(podUID, containerID, extraControlKnobConfigs[controlKnobKeyIOWeight].CgroupSubsysName, cgroupIOWeightName, qosLevelDefaultValue)
 			if err != nil {
 				general.Warningf("ApplyUnifiedDataForContainer failed:%v", err)
@@ -106,9 +140,14 @@ func IOWeightTaskFunc(conf *coreconfig.Configuration,
 		general.Infof("skip IOWeightTaskFunc in cg1 env")
 		return
 	}
-
+	/*
+		initializeOnce.Do(func() {
+			applyIOWeightCgroupLevelConfig(conf)
+		})
+	*/
 	// checking qos-level io.weight configuration.
 	if len(conf.IOWeightQoSLevelConfigFile) > 0 {
 		applyIOWeightQoSLevelConfig(conf, emitter, metaServer)
+		applyIOWeightCgroupLevelConfig(conf)
 	}
 }
