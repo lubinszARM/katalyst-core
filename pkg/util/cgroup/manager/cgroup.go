@@ -43,6 +43,14 @@ func ApplyMemoryWithRelativePath(relCgroupPath string, data *common.MemoryData) 
 	return GetManager().ApplyMemory(absCgroupPath, data)
 }
 
+func ApplyMemoryWithAbsolutePath(absCgroupPath string, data *common.MemoryData) error {
+	if data == nil {
+		return fmt.Errorf("ApplyMemoryWithAbsolutePath with nil cgroup data")
+	}
+
+	return GetManager().ApplyMemory(absCgroupPath, data)
+}
+
 func ApplyCPUWithRelativePath(relCgroupPath string, data *common.CPUData) error {
 	if data == nil {
 		return fmt.Errorf("ApplyCPUWithRelativePath with nil cgroup data")
