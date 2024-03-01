@@ -21,8 +21,10 @@ package ioweight
 
 import (
 	"context"
+	"sync"
 
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/commonstate"
+	"github.com/kubewharf/katalyst-core/pkg/config"
 	coreconfig "github.com/kubewharf/katalyst-core/pkg/config"
 	dynamicconfig "github.com/kubewharf/katalyst-core/pkg/config/agent/dynamic"
 	"github.com/kubewharf/katalyst-core/pkg/metaserver"
@@ -32,6 +34,35 @@ import (
 	"github.com/kubewharf/katalyst-core/pkg/util/general"
 	"github.com/kubewharf/katalyst-core/pkg/util/native"
 )
+
+var (
+	initializeOnce sync.Once
+)
+
+func applyIOWeightCgroupLevelConfig(conf *config.Configuration) {
+	if conf.IOWeightCgroupLevelConfigFile == "" {
+		general.Errorf("IOWeightCgroupLevelConfigFile isn't configured")
+		return
+	}
+
+	ioWightCgroupLevelConfigs := make(map[string]uint64)
+	err := general.LoadJsonConfig(conf.IOWeightCgroupLevelConfigFile, &ioWightCgroupLevelConfigs)
+	if err != nil {
+		general.Errorf("load IOWeightCgroupLevelConfig failed with error: %v", err)
+		return
+	}
+
+	for relativeCgPath, weight := range ioWightCgroupLevelConfigs {
+		err := cgroupmgr.ApplyIOWeightWithRelativePath(relativeCgPath, defaultDevID, weight)
+		if err != nil {
+			general.Errorf("ApplyIOWeightWithRelativePath for devID: %s in relativeCgPath: %s failed with error: %v",
+				defaultDevID, relativeCgPath, err)
+		} else {
+			general.Infof("ApplyIOWeightWithRelativePath for devID: %s, weight: %d in relativeCgPath: %s successfully",
+				defaultDevID, weight, relativeCgPath)
+		}
+	}
+}
 
 func applyIOWeightQoSLevelConfig(conf *coreconfig.Configuration,
 	emitter metrics.MetricEmitter, metaServer *metaserver.MetaServer) {
@@ -106,6 +137,11 @@ func IOWeightTaskFunc(conf *coreconfig.Configuration,
 		general.Infof("skip IOWeightTaskFunc in cg1 env")
 		return
 	}
+
+	initializeOnce.Do(func() {
+		//        disableIOCost(conf)
+		applyIOWeightCgroupLevelConfig(conf)
+	})
 
 	// checking qos-level io.weight configuration.
 	if len(conf.IOWeightQoSLevelConfigFile) > 0 {
