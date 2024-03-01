@@ -675,6 +675,8 @@ func (m *MalachiteMetricsProvisioner) processContainerMemoryData(podUID, contain
 			utilmetric.MetricData{Value: float64(mem.TotalCache), Time: &updateTime})
 		m.metricStore.SetContainerMetric(podUID, containerName, consts.MetricMemShmemContainer,
 			utilmetric.MetricData{Value: float64(mem.TotalShmem), Time: &updateTime})
+		m.metricStore.SetContainerMetric(podUID, containerName, consts.MetricMemFileInactiveContainer,
+			utilmetric.MetricData{Value: float64(mem.TotalInactiveFile), Time: &updateTime})
 
 		m.metricStore.SetContainerMetric(podUID, containerName, consts.MetricMemDirtyContainer,
 			utilmetric.MetricData{Value: float64(mem.Dirty), Time: &updateTime})
@@ -707,6 +709,8 @@ func (m *MalachiteMetricsProvisioner) processContainerMemoryData(podUID, contain
 			utilmetric.MetricData{Value: float64(mem.MemStats.Anon), Time: &updateTime})
 		m.metricStore.SetContainerMetric(podUID, containerName, consts.MetricMemCacheContainer,
 			utilmetric.MetricData{Value: float64(mem.MemStats.File), Time: &updateTime})
+		m.metricStore.SetContainerMetric(podUID, containerName, consts.MetricMemFileInactiveContainer,
+			utilmetric.MetricData{Value: float64(mem.MemStats.InactiveFile), Time: &updateTime})
 
 		m.metricStore.SetContainerMetric(podUID, containerName, consts.MetricMemShmemContainer,
 			utilmetric.MetricData{Value: float64(mem.MemStats.Shmem), Time: &updateTime})
