@@ -132,13 +132,14 @@ func (p *StaticPolicy) Start() (err error) {
 		}
 	}
 
-	if p.enableSettingIOCost {
-		general.Infof("setIOCost enabled")
-		err := periodicalhandler.RegisterPeriodicalHandler(qrm.QRMIOPluginPeriodicalHandlerGroupName,
-			iocost.EnableSetIOCostPeriodicalHandlerName, iocost.SetIOCost, 300*time.Second)
-		if err != nil {
-			general.Infof("setIOCost failed, err=%v", err)
-		}
+	// Notice: iocost.SetIOCost will check the featuregate.
+	// If conf.EnableSettingIOCost was disabled,
+	// iocost.SetIOCost will disable all the io.cost related functions in host.
+	general.Infof("setIOCost handler started")
+	err = periodicalhandler.RegisterPeriodicalHandler(qrm.QRMIOPluginPeriodicalHandlerGroupName,
+		iocost.EnableSetIOCostPeriodicalHandlerName, iocost.SetIOCost, 300*time.Second)
+	if err != nil {
+		general.Infof("setIOCost failed, err=%v", err)
 	}
 
 	go wait.Until(func() {
