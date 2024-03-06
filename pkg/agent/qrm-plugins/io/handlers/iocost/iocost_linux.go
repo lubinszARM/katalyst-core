@@ -109,7 +109,6 @@ func reportDevicesIOCostVrate(emitter metrics.MetricEmitter) {
 				general.Errorf("no device name found for device id: %s", devID)
 				continue
 			}
-
 			_ = emitter.StoreFloat64(MetricNameIOCostVrate, valueFloat64,
 				metrics.MetricTypeNameRaw, metrics.MetricTag{
 					Key: "device_name",
@@ -120,8 +119,7 @@ func reportDevicesIOCostVrate(emitter metrics.MetricEmitter) {
 }
 
 func disableIOCost(conf *config.Configuration) {
-	if !conf.EnableSettingIOCost {
-		general.Infof("IOCostSetting disabled, skip disableIOCost")
+	if !cgcommon.CheckCgroup2UnifiedMode() {
 		return
 	}
 
@@ -267,13 +265,12 @@ func SetIOCost(conf *coreconfig.Configuration,
 	}
 
 	// EnableSettingIOCost featuregate.
-	if !conf.EnableSettingIOCost {
-		general.Infof("SetIOCost disabled")
-		return
-	}
-
-	if !conf.EnableSettingIOCostHDDOnly {
-		general.Infof("SetIOCostHDDOnly disabled. For now, only HDD supported")
+	if !conf.EnableSettingIOCost || !conf.EnableSettingIOCostHDDOnly {
+		general.Infof("SetIOCost disabled. For now, only HDD supported.")
+		// If EnableSettingIOCost was disabled, we should never enable io.cost.
+		initializeOnce.Do(func() {
+			disableIOCost(conf)
+		})
 		return
 	}
 

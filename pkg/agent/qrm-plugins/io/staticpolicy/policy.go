@@ -135,7 +135,7 @@ func (p *StaticPolicy) Start() (err error) {
 	if p.enableSettingIOCost {
 		general.Infof("setIOCost enabled")
 		err := periodicalhandler.RegisterPeriodicalHandler(qrm.QRMIOPluginPeriodicalHandlerGroupName,
-			iocost.EnableSetIOCostPeriodicalHandlerName, iocost.SetIOCost, 300*time.Second)
+			iocost.EnableSetIOCostPeriodicalHandlerName, iocost.SetIOCost, 60*time.Second)
 		if err != nil {
 			general.Infof("setIOCost failed, err=%v", err)
 		}
