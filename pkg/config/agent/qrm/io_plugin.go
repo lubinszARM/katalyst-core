@@ -38,10 +38,9 @@ type IOWeightOption struct {
 }
 
 type IOCostOption struct {
-	EnableSettingIOCost        bool
-	EnableSettingIOCostHDDOnly bool
-	IOCostQoSConfigFile        string
-	IOCostModelConfigFile      string
+	EnableSettingIOCost   bool
+	IOCostQoSConfigFile   string
+	IOCostModelConfigFile string
 }
 
 func NewIOQRMPluginConfig() *IOQRMPluginConfig {
