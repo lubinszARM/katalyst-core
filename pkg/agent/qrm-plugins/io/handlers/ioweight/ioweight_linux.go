@@ -22,6 +22,7 @@ package ioweight
 import (
 	"context"
 	"strconv"
+	"sync"
 
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/commonstate"
 	coreconfig "github.com/kubewharf/katalyst-core/pkg/config"
@@ -32,6 +33,10 @@ import (
 	cgroupmgr "github.com/kubewharf/katalyst-core/pkg/util/cgroup/manager"
 	"github.com/kubewharf/katalyst-core/pkg/util/general"
 	"github.com/kubewharf/katalyst-core/pkg/util/native"
+)
+
+var (
+	initializeOnce sync.Once
 )
 
 func applyIOWeightCgroupLevelConfig(conf *coreconfig.Configuration, emitter metrics.MetricEmitter) {
@@ -152,13 +157,15 @@ func IOWeightTaskFunc(conf *coreconfig.Configuration,
 		return
 	}
 
+	initializeOnce.Do(func() {
+		// checking cgroup-level io.weight configuration.
+		if len(conf.IOWeightCgroupLevelConfigFile) > 0 {
+			applyIOWeightCgroupLevelConfig(conf, emitter)
+		}
+	})
+
 	// checking qos-level io.weight configuration.
 	if len(conf.IOWeightQoSLevelConfigFile) > 0 {
 		applyIOWeightQoSLevelConfig(conf, emitter, metaServer)
-	}
-
-	// checking cgroup-level io.weight configuration.
-	if len(conf.IOWeightCgroupLevelConfigFile) > 0 {
-		applyIOWeightCgroupLevelConfig(conf, emitter)
 	}
 }
