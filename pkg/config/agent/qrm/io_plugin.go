@@ -22,6 +22,7 @@ type IOQRMPluginConfig struct {
 
 	WritebackThrottlingOption
 	IOWeightOption
+	IOCostOption
 }
 
 type WritebackThrottlingOption struct {
@@ -34,6 +35,13 @@ type IOWeightOption struct {
 	EnableSettingIOWeight         bool
 	IOWeightQoSLevelConfigFile    string
 	IOWeightCgroupLevelConfigFile string
+}
+
+type IOCostOption struct {
+	EnableSettingIOCost        bool
+	EnableSettingIOCostHDDOnly bool
+	IOCostQoSConfigFile        string
+	IOCostModelConfigFile      string
 }
 
 func NewIOQRMPluginConfig() *IOQRMPluginConfig {
