@@ -29,6 +29,7 @@ import (
 	"github.com/kubewharf/katalyst-core/cmd/katalyst-agent/app/agent"
 	"github.com/kubewharf/katalyst-core/cmd/katalyst-agent/app/agent/qrm"
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/io/handlers/dirtymem"
+	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/io/handlers/iocost"
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/io/handlers/ioweight"
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/util"
 	"github.com/kubewharf/katalyst-core/pkg/agent/utilcomponent/periodicalhandler"
@@ -59,6 +60,7 @@ type StaticPolicy struct {
 
 	enableSettingWBT      bool
 	enableSettingIOWeight bool
+	enableSettingIOCost   bool
 }
 
 // NewStaticPolicy returns a static io policy
@@ -78,6 +80,7 @@ func NewStaticPolicy(agentCtx *agent.GenericContext, conf *config.Configuration,
 		qosConfig:             conf.QoSConfiguration,
 		enableSettingWBT:      conf.EnableSettingWBT,
 		enableSettingIOWeight: conf.EnableSettingIOWeight,
+		enableSettingIOCost:   conf.EnableSettingIOCost,
 	}
 
 	// todo: currently there is no resource needed to be topology-aware and synchronously allocated in this plugin,
@@ -126,6 +129,15 @@ func (p *StaticPolicy) Start() (err error) {
 			dirtymem.EnableSetDirtyMemPeriodicalHandlerName, dirtymem.SetDirtyMem, 300*time.Second)
 		if err != nil {
 			general.Infof("setSockMem failed, err=%v", err)
+		}
+	}
+
+	if p.enableSettingIOCost {
+		general.Infof("setIOCost enabled")
+		err := periodicalhandler.RegisterPeriodicalHandler(qrm.QRMIOPluginPeriodicalHandlerGroupName,
+			iocost.EnableSetIOCostPeriodicalHandlerName, iocost.SetIOCost, 300*time.Second)
+		if err != nil {
+			general.Infof("setIOCost failed, err=%v", err)
 		}
 	}
 

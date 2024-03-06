@@ -29,6 +29,7 @@ type IOOptions struct {
 	// TO-DO
 	//DirtyThrottlingOption // option for dirty throttling, it determin the global watermark of dirty memory.
 	IOWeightOption
+	IOCostOption
 }
 
 type WritebackThrottlingOption struct {
@@ -43,6 +44,13 @@ type IOWeightOption struct {
 	IOWeightCgroupLevelConfigFile string
 }
 
+type IOCostOption struct {
+	EnableSettingIOCost        bool
+	EnableSettingIOCostHDDOnly bool
+	IOCostQoSConfigFile        string
+	IOCostModelConfigFile      string
+}
+
 func NewIOOptions() *IOOptions {
 	return &IOOptions{
 		PolicyName: "static",
@@ -55,6 +63,12 @@ func NewIOOptions() *IOOptions {
 			EnableSettingIOWeight:         false,
 			IOWeightQoSLevelConfigFile:    "",
 			IOWeightCgroupLevelConfigFile: "",
+		},
+		IOCostOption: IOCostOption{
+			EnableSettingIOCost:        false,
+			EnableSettingIOCostHDDOnly: false,
+			IOCostQoSConfigFile:        "",
+			IOCostModelConfigFile:      "",
 		},
 	}
 }
@@ -76,6 +90,14 @@ func (o *IOOptions) AddFlags(fss *cliflag.NamedFlagSets) {
 		o.IOWeightQoSLevelConfigFile, "the absolute path of io.weight qos config file")
 	fs.StringVar(&o.IOWeightCgroupLevelConfigFile, "io-weight-cgroup-config-file",
 		o.IOWeightCgroupLevelConfigFile, "the absolute path of io.weight cgroup config file")
+	fs.BoolVar(&o.EnableSettingIOCost, "enable-io-cost",
+		o.EnableSettingIOCost, "if set it to true, io.cost setting will be executed")
+	fs.BoolVar(&o.EnableSettingIOCostHDDOnly, "enable-io-cost-hdd-only",
+		o.EnableSettingIOCostHDDOnly, "if set it to true, only io.cost setting for HDD will be executed")
+	fs.StringVar(&o.IOCostQoSConfigFile, "io-cost-qos-config-file",
+		o.IOCostQoSConfigFile, "the absolute path of io.cost.qos qos config file")
+	fs.StringVar(&o.IOCostModelConfigFile, "io-cost-model-config-file",
+		o.IOCostModelConfigFile, "the absolute path of io.cost.model qos config file")
 }
 
 func (o *IOOptions) ApplyTo(conf *qrmconfig.IOQRMPluginConfig) error {
@@ -86,5 +108,9 @@ func (o *IOOptions) ApplyTo(conf *qrmconfig.IOQRMPluginConfig) error {
 	conf.EnableSettingIOWeight = o.EnableSettingIOWeight
 	conf.IOWeightQoSLevelConfigFile = o.IOWeightQoSLevelConfigFile
 	conf.IOWeightCgroupLevelConfigFile = o.IOWeightCgroupLevelConfigFile
+	conf.EnableSettingIOCost = o.EnableSettingIOCost
+	conf.EnableSettingIOCostHDDOnly = o.EnableSettingIOCostHDDOnly
+	conf.IOCostQoSConfigFile = o.IOCostQoSConfigFile
+	conf.IOCostModelConfigFile = o.IOCostModelConfigFile
 	return nil
 }
