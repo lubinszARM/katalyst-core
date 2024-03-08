@@ -80,6 +80,7 @@ func testManager(t *testing.T, version string) {
 
 	_, _ = GetMemoryWithRelativePath("/")
 	_, _ = GetMemoryWithAbsolutePath("/")
+	_, _ = GetDetailedMemoryWithAbsolutePath("/")
 	_, _ = GetCPUWithRelativePath("/")
 	_, _ = GetMetricsWithRelativePath("/", map[string]struct{}{"cpu": {}})
 	_, _ = GetPidsWithRelativePath("/")
