@@ -332,24 +332,22 @@ func TestMemProtection(t *testing.T) {
 			QoSConfiguration: nil,
 		},
 	}, metrics.DummyMetrics{}, metaServerNil)
+
+	calculateMemSoftLimit("fake", 10)
 }
 
 func TestGetUserSpecifiedMemoryProtectionInBytes(t *testing.T) {
 	t.Parallel()
 
-	result := getUserSpecifiedMemoryProtectionInBytes(1073741824, 107374182, "10")
+	result := getUserSpecifiedMemoryProtectionInBytes(1073741824, 107374182, 10)
 	var expected uint64 = 107376640
 	assert.Equal(t, expected, result, "Test getUserSpecifiedMemProtectionInBytes failed")
 
-	result = getUserSpecifiedMemoryProtectionInBytes(1073741824, 107374182, "1a")
+	result = getUserSpecifiedMemoryProtectionInBytes(1073741824, 107374182, 123)
 	expected = 0
 	assert.Equal(t, expected, result, "Test getUserSpecifiedMemProtectionInBytes failed")
 
-	result = getUserSpecifiedMemoryProtectionInBytes(1073741824, 107374182, "123")
-	expected = 0
-	assert.Equal(t, expected, result, "Test getUserSpecifiedMemProtectionInBytes failed")
-
-	result = getUserSpecifiedMemoryProtectionInBytes(9223372036854771712, 1073741824, "10")
+	result = getUserSpecifiedMemoryProtectionInBytes(9223372036854771712, 1073741824, 10)
 	expected = 120799232
 	assert.Equal(t, expected, result, "Test getUserSpecifiedMemProtectionInBytes failed")
 }
