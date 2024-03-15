@@ -27,6 +27,7 @@ type WritebackThrottlingOption struct {
 	EnableSettingWBT bool
 	WBTValueHDD      int
 	WBTValueSSD      int
+	WBTValueNVME     int
 }
 
 func NewIOQRMPluginConfig() *IOQRMPluginConfig {

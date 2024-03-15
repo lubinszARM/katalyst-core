@@ -34,6 +34,7 @@ type WritebackThrottlingOption struct {
 	EnableSettingWBT bool
 	WBTValueHDD      int
 	WBTValueSSD      int
+	WBTValueNVME     int
 }
 
 func NewIOOptions() *IOOptions {
@@ -43,6 +44,7 @@ func NewIOOptions() *IOOptions {
 			EnableSettingWBT: false,
 			WBTValueHDD:      75000,
 			WBTValueSSD:      2000,
+			WBTValueNVME:     2000,
 		},
 	}
 }
@@ -58,6 +60,8 @@ func (o *IOOptions) AddFlags(fss *cliflag.NamedFlagSets) {
 		o.WBTValueHDD, "writeback throttling value for HDD")
 	fs.IntVar(&o.WBTValueSSD, "disk-wbt-ssd",
 		o.WBTValueSSD, "writeback throttling value for SSD")
+	fs.IntVar(&o.WBTValueNVME, "disk-wbt-nvme",
+		o.WBTValueNVME, "writeback throttling value for NVME")
 }
 
 func (o *IOOptions) ApplyTo(conf *qrmconfig.IOQRMPluginConfig) error {
@@ -65,5 +69,6 @@ func (o *IOOptions) ApplyTo(conf *qrmconfig.IOQRMPluginConfig) error {
 	conf.EnableSettingWBT = o.EnableSettingWBT
 	conf.WBTValueHDD = o.WBTValueHDD
 	conf.WBTValueSSD = o.WBTValueSSD
+	conf.WBTValueNVME = o.WBTValueNVME
 	return nil
 }

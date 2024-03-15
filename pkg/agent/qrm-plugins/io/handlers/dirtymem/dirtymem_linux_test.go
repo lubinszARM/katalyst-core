@@ -60,4 +60,20 @@ func TestSetDirtyMem(t *testing.T) {
 		},
 	}, nil, &dynamicconfig.DynamicAgentConfiguration{}, metrics.DummyMetrics{}, nil)
 
+	SetDirtyMem(&coreconfig.Configuration{
+		AgentConfiguration: &agent.AgentConfiguration{
+			StaticAgentConfiguration: &configagent.StaticAgentConfiguration{
+				QRMPluginsConfiguration: &qrm.QRMPluginsConfiguration{
+					IOQRMPluginConfig: &qrm.IOQRMPluginConfig{
+						WritebackThrottlingOption: qrm.WritebackThrottlingOption{
+							EnableSettingWBT: true,
+							WBTValueHDD:      12345,
+							WBTValueSSD:      2000,
+							WBTValueNVME:     3000,
+						},
+					},
+				},
+			},
+		},
+	}, nil, &dynamicconfig.DynamicAgentConfiguration{}, metrics.DummyMetrics{}, nil)
 }
