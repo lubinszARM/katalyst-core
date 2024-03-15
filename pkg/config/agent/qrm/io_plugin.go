@@ -21,6 +21,7 @@ type IOQRMPluginConfig struct {
 	PolicyName string
 
 	WritebackThrottlingOption
+	DirtyThrottlingOption
 }
 
 type WritebackThrottlingOption struct {
@@ -28,6 +29,13 @@ type WritebackThrottlingOption struct {
 	WBTValueHDD      int
 	WBTValueSSD      int
 	WBTValueNVME     int
+}
+
+type DirtyThrottlingOption struct {
+	EnableSettingDirty   bool
+	DirtyBackgroundBytes int
+	DirtyBytes           int
+	DirtyWritebackCycle  int
 }
 
 func NewIOQRMPluginConfig() *IOQRMPluginConfig {

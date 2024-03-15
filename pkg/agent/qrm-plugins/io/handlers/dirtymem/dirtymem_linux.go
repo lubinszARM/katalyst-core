@@ -20,11 +20,17 @@ limitations under the License.
 package dirtymem
 
 import (
+	"sync"
+
 	coreconfig "github.com/kubewharf/katalyst-core/pkg/config"
 	dynamicconfig "github.com/kubewharf/katalyst-core/pkg/config/agent/dynamic"
 	"github.com/kubewharf/katalyst-core/pkg/metaserver"
 	"github.com/kubewharf/katalyst-core/pkg/metrics"
 	"github.com/kubewharf/katalyst-core/pkg/util/general"
+)
+
+var (
+	initializeOnce sync.Once
 )
 
 func SetDirtyMem(conf *coreconfig.Configuration,
@@ -49,4 +55,9 @@ func SetDirtyMem(conf *coreconfig.Configuration,
 	if conf.EnableSettingWBT {
 		SetWBTLimit(conf, emitter, metaServer)
 	}
+
+	initializeOnce.Do(func() {
+		SetDirtyLimit(conf, emitter, metaServer)
+	})
+
 }
