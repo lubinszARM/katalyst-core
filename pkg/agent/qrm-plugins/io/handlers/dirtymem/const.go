@@ -21,8 +21,14 @@ const EnableSetDirtyMemPeriodicalHandlerName = "SetDirtyMem"
 const (
 	sysDiskPrefix = "/sys/block"
 	wbtSuffix     = "queue/wbt_lat_usec"
+
+	hostDirtyBackgroundBytes    = "/proc/sys/vm/dirty_background_bytes"
+	hostDirtyRatio              = "/proc/sys/vm/dirty_ratio"
+	hostDirtyWritebackCentisecs = "/proc/sys/vm/dirty_writeback_centisecs"
+	hostDirtyExpireCentisecs    = "/proc/sys/vm/dirty_expire_centisecs"
 )
 
 const (
-	metricNameDiskWBT = "async_handler_disk_wbt"
+	metricNameDiskWBT    = "async_handler_disk_wbt"
+	metricNameDirtyLimit = "async_handler_dirty_limit"
 )

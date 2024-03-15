@@ -26,8 +26,7 @@ type IOOptions struct {
 	PolicyName string
 
 	WritebackThrottlingOption // option for writeback throttling, it determin the recycling speed of dirty memory.
-	// TO-DO
-	//DirtyThrottlingOption // option for dirty throttling, it determin the global watermark of dirty memory.
+	DirtyThrottlingOption     // option for dirty throttling, it determin the global watermark of dirty memory.
 }
 
 type WritebackThrottlingOption struct {
@@ -35,6 +34,14 @@ type WritebackThrottlingOption struct {
 	WBTValueHDD      int
 	WBTValueSSD      int
 	WBTValueNVME     int
+}
+
+type DirtyThrottlingOption struct {
+	EnableSettingDirty      bool
+	DirtyBackgroundBytes    int
+	DirtyRatio              int
+	DirtyWritebackCentisecs int
+	DirtyExpireCentisecs    int
 }
 
 func NewIOOptions() *IOOptions {
@@ -45,6 +52,13 @@ func NewIOOptions() *IOOptions {
 			WBTValueHDD:      75000,
 			WBTValueSSD:      2000,
 			WBTValueNVME:     2000,
+		},
+		DirtyThrottlingOption: DirtyThrottlingOption{
+			EnableSettingDirty:      false,
+			DirtyBackgroundBytes:    -1,
+			DirtyRatio:              -1,
+			DirtyWritebackCentisecs: -1,
+			DirtyExpireCentisecs:    -1,
 		},
 	}
 }
@@ -62,6 +76,16 @@ func (o *IOOptions) AddFlags(fss *cliflag.NamedFlagSets) {
 		o.WBTValueSSD, "writeback throttling value for SSD")
 	fs.IntVar(&o.WBTValueNVME, "disk-wbt-nvme",
 		o.WBTValueNVME, "writeback throttling value for NVME")
+	fs.BoolVar(&o.EnableSettingDirty, "enable-setting-dirty",
+		o.EnableSettingDirty, "if set it to true, dirty throttling related control operations will be executed")
+	fs.IntVar(&o.DirtyBackgroundBytes, "dirty-background-bytes",
+		o.DirtyBackgroundBytes, "background kernel flusher")
+	fs.IntVar(&o.DirtyRatio, "dirty-ratio",
+		o.DirtyRatio, "process start writeback directly")
+	fs.IntVar(&o.DirtyWritebackCentisecs, "dirty-writeback-centisecs",
+		o.DirtyWritebackCentisecs, "determines the periodic wake up time of kernel flusher threads")
+	fs.IntVar(&o.DirtyExpireCentisecs, "dirty-expire-centisecs",
+		o.DirtyExpireCentisecs, "determines the expire time of dirty memory")
 }
 
 func (o *IOOptions) ApplyTo(conf *qrmconfig.IOQRMPluginConfig) error {
@@ -70,5 +94,10 @@ func (o *IOOptions) ApplyTo(conf *qrmconfig.IOQRMPluginConfig) error {
 	conf.WBTValueHDD = o.WBTValueHDD
 	conf.WBTValueSSD = o.WBTValueSSD
 	conf.WBTValueNVME = o.WBTValueNVME
+	conf.EnableSettingDirty = o.EnableSettingDirty
+	conf.DirtyBackgroundBytes = o.DirtyBackgroundBytes
+	conf.DirtyRatio = o.DirtyRatio
+	conf.DirtyWritebackCentisecs = o.DirtyWritebackCentisecs
+	conf.DirtyExpireCentisecs = o.DirtyExpireCentisecs
 	return nil
 }
