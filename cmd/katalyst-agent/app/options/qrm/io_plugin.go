@@ -26,8 +26,7 @@ type IOOptions struct {
 	PolicyName string
 
 	WritebackThrottlingOption // option for writeback throttling, it determin the recycling speed of dirty memory.
-	// TO-DO
-	//DirtyThrottlingOption // option for dirty throttling, it determin the global watermark of dirty memory.
+	DirtyThrottlingOption     // option for dirty throttling, it determin the global watermark of dirty memory.
 }
 
 type WritebackThrottlingOption struct {
@@ -35,6 +34,13 @@ type WritebackThrottlingOption struct {
 	WBTValueHDD      int
 	WBTValueSSD      int
 	WBTValueNVME     int
+}
+
+type DirtyThrottlingOption struct {
+	EnableSettingDirty   bool
+	DirtyBackgroundBytes int
+	DirtyBytes           int
+	DirtyWritebackCycle  int
 }
 
 func NewIOOptions() *IOOptions {
@@ -45,6 +51,12 @@ func NewIOOptions() *IOOptions {
 			WBTValueHDD:      75000,
 			WBTValueSSD:      2000,
 			WBTValueNVME:     2000,
+		},
+		DirtyThrottlingOption: DirtyThrottlingOption{
+			EnableSettingDirty:   false,
+			DirtyBackgroundBytes: -1,
+			DirtyBytes:           -1,
+			DirtyWritebackCycle:  -1,
 		},
 	}
 }
@@ -62,6 +74,14 @@ func (o *IOOptions) AddFlags(fss *cliflag.NamedFlagSets) {
 		o.WBTValueSSD, "writeback throttling value for SSD")
 	fs.IntVar(&o.WBTValueNVME, "disk-wbt-nvme",
 		o.WBTValueNVME, "writeback throttling value for NVME")
+	fs.BoolVar(&o.EnableSettingDirty, "enable-setting-dirty",
+		o.EnableSettingDirty, "if set it to true, dirty throttling related control operations will be executed")
+	fs.IntVar(&o.DirtyBackgroundBytes, "dirty-background-bytes",
+		o.DirtyBackgroundBytes, "background kernel flusher")
+	fs.IntVar(&o.DirtyBytes, "dirty-bytes",
+		o.DirtyBytes, "process start writeback directly")
+	fs.IntVar(&o.DirtyWritebackCycle, "dirty-writeback-centisecs",
+		o.DirtyWritebackCycle, "determines the periodic wake up time of kernel flusher threads")
 }
 
 func (o *IOOptions) ApplyTo(conf *qrmconfig.IOQRMPluginConfig) error {
@@ -70,5 +90,9 @@ func (o *IOOptions) ApplyTo(conf *qrmconfig.IOQRMPluginConfig) error {
 	conf.WBTValueHDD = o.WBTValueHDD
 	conf.WBTValueSSD = o.WBTValueSSD
 	conf.WBTValueNVME = o.WBTValueNVME
+	conf.EnableSettingDirty = o.EnableSettingDirty
+	conf.DirtyBackgroundBytes = o.DirtyBackgroundBytes
+	conf.DirtyBytes = o.DirtyBytes
+	conf.DirtyWritebackCycle = o.DirtyWritebackCycle
 	return nil
 }

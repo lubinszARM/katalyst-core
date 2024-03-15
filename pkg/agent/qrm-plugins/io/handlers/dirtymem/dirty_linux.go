@@ -20,28 +20,32 @@ limitations under the License.
 package dirtymem
 
 import (
-	"sync"
+	"fmt"
+	"os"
+	"strconv"
 
 	coreconfig "github.com/kubewharf/katalyst-core/pkg/config"
-	dynamicconfig "github.com/kubewharf/katalyst-core/pkg/config/agent/dynamic"
 	"github.com/kubewharf/katalyst-core/pkg/metaserver"
 	"github.com/kubewharf/katalyst-core/pkg/metrics"
 	"github.com/kubewharf/katalyst-core/pkg/util/general"
 )
 
-var (
-	initializeOnce sync.Once
-)
+func setHostDirtyFile(DirtyFile string, value uint64) error {
+	strValue := strconv.FormatUint(value, 10)
+	data := []byte(strValue)
 
-func SetDirtyMem(conf *coreconfig.Configuration,
-	_ interface{},
-	_ *dynamicconfig.DynamicAgentConfiguration,
-	emitter metrics.MetricEmitter,
-	metaServer *metaserver.MetaServer) {
+	err := os.WriteFile(DirtyFile, data, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write to %s, err %v", DirtyFile, err)
+	}
+	return nil
+}
+
+func SetDirtyLimit(conf *coreconfig.Configuration,
+	emitter metrics.MetricEmitter, metaServer *metaserver.MetaServer) {
 	general.Infof("called")
-
 	if conf == nil {
-		general.Errorf("nil extraConf")
+		general.Errorf("nil Conf")
 		return
 	} else if emitter == nil {
 		general.Errorf("nil emitter")
@@ -51,13 +55,21 @@ func SetDirtyMem(conf *coreconfig.Configuration,
 		return
 	}
 
-	// EnableSettingWBT featuregate.
-	if conf.EnableSettingWBT {
-		SetWBTLimit(conf, emitter, metaServer)
+	// SettingSockMem featuregate.
+	if !conf.EnableSettingDirty {
+		general.Infof("EnableSettingDirty disabled")
+		return
 	}
 
-	initializeOnce.Do(func() {
-		SetDirtyLimit(conf, emitter, metaServer)
-	})
+	if conf.DirtyBackgroundBytes != -1 {
+		_ = setHostDirtyFile(hostDirtyBackgroundBytes, uint64(conf.DirtyBackgroundBytes))
+	}
 
+	if conf.DirtyBytes != -1 {
+		_ = setHostDirtyFile(hostDirtyBytes, uint64(conf.DirtyBytes))
+	}
+
+	if conf.DirtyWritebackCycle != -1 {
+		_ = setHostDirtyFile(hostDirtyWritebackCentisecs, uint64(conf.DirtyWritebackCycle))
+	}
 }
