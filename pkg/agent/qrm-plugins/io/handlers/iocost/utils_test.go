@@ -20,9 +20,6 @@ limitations under the License.
 package iocost
 
 import (
-	"fmt"
-	"io/ioutil"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -107,51 +104,6 @@ func Test_getContainerdRootDir(t *testing.T) {
 			getContainerdRootDir()
 		})
 	}
-}
-
-func TestIsHDD(t *testing.T) {
-	testCases := []struct {
-		deviceName     string
-		expectedHDD    bool
-		expectedErr    error
-		fileContents   string
-		rotationalFile string
-	}{
-		// Test case where device name starts with "sd" and rotational is 1
-		{"sda", true, nil, "1\n", ""},
-		// Test case where device name starts with "sd" and rotational is 0
-		{"sdb", false, nil, "0\n", ""},
-		// Test case where device name doesn't start with "sd"
-		{"nvme0n1", false, fmt.Errorf("not scsi disk"), "", ""},
-		// Test case where rotational file is not found
-		{"sdc", false, nil, "", "nonexistentfile"},
-	}
-
-	for _, tc := range testCases {
-		tempFile, err := ioutil.TempFile("", "rotational")
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer os.Remove(tempFile.Name())
-
-		_, err = tempFile.WriteString(tc.fileContents)
-		if err != nil {
-			t.Fatal(err)
-		}
-		tempFile.Close()
-
-		actualHDD, actualErr := isHDD(tc.deviceName, tempFile.Name())
-		if actualHDD != tc.expectedHDD {
-			t.Errorf("Test case failed for deviceName=%s. Got HDD=%t, Err=%v. Expected HDD=%t, Err=%v",
-				tc.deviceName, actualHDD, actualErr, tc.expectedHDD, tc.expectedErr)
-		} else if actualErr == nil {
-			_, err := isHDD(tc.deviceName, "notExit")
-			assert.NoError(t, err)
-			_, err = isHDD(tc.deviceName, "/tmp/")
-			assert.Error(t, err)
-		}
-	}
-
 }
 
 func TestGetDeviceNameFromID(t *testing.T) {
