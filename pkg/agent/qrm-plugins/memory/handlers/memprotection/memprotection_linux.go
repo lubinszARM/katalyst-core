@@ -23,6 +23,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"sync"
 
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/commonstate"
 	coreconfig "github.com/kubewharf/katalyst-core/pkg/config"
@@ -34,6 +35,10 @@ import (
 	cgroupmgr "github.com/kubewharf/katalyst-core/pkg/util/cgroup/manager"
 	"github.com/kubewharf/katalyst-core/pkg/util/general"
 	"github.com/kubewharf/katalyst-core/pkg/util/native"
+)
+
+var (
+	initializeOnce sync.Once
 )
 
 func calculatedBestSoftLimit(memUsage, memFileInactive, userSoftLimit uint64) uint64 {
@@ -89,7 +94,7 @@ func calculateMemSoftLimit(relCgPath string, ratio uint64) (uint64, error) {
 }
 
 func applyMemSoftLimitCgroupLevelConfig(conf *coreconfig.Configuration,
-	emitter metrics.MetricEmitter) {
+	emitter metrics.MetricEmitter, enable bool) {
 	if conf.MemSoftLimitCgroupLevelConfigFile == "" {
 		general.Errorf("MemSoftLimitCgroupLevelConfigFile isn't configured")
 		return
@@ -103,11 +108,14 @@ func applyMemSoftLimitCgroupLevelConfig(conf *coreconfig.Configuration,
 	}
 
 	for relCgPath, ratio := range memSoftLimitCgroupLevelConfigs {
-		softLimit, err := calculateMemSoftLimit(relCgPath, ratio)
-		if err != nil {
-			general.Errorf("calculateMemSoftLimit for relativeCgPath: %s failed with error: %v",
-				relCgPath, err)
-			continue
+		var softLimit uint64 = 1
+		if enable {
+			softLimit, err = calculateMemSoftLimit(relCgPath, ratio)
+			if err != nil {
+				general.Errorf("calculateMemSoftLimit for relativeCgPath: %s failed with error: %v",
+					relCgPath, err)
+				continue
+			}
 		}
 
 		// OK. Set the value for memory.low.
@@ -125,8 +133,7 @@ func applyMemSoftLimitCgroupLevelConfig(conf *coreconfig.Configuration,
 	}
 }
 
-func applyMemSoftLimitQoSLevelConfig(conf *coreconfig.Configuration,
-	emitter metrics.MetricEmitter, metaServer *metaserver.MetaServer) {
+func applyMemSoftLimitQoSLevelConfig(conf *coreconfig.Configuration, emitter metrics.MetricEmitter, metaServer *metaserver.MetaServer, enable bool) {
 	if conf.MemSoftLimitQoSLevelConfigFile == "" {
 		general.Infof("no MemSoftLimitQoSLevelConfigFile found")
 		return
@@ -137,6 +144,7 @@ func applyMemSoftLimitQoSLevelConfig(conf *coreconfig.Configuration,
 		general.Errorf("MemSoftLimitQoSLevelConfigFile load failed:%v", err)
 		return
 	}
+
 	ctx := context.Background()
 	podList, err := metaServer.GetPodList(ctx, native.PodIsActive)
 	if err != nil {
@@ -149,9 +157,11 @@ func applyMemSoftLimitQoSLevelConfig(conf *coreconfig.Configuration,
 			general.Warningf("get nil pod from metaServer")
 			continue
 		}
+
 		if conf.QoSConfiguration == nil {
 			continue
 		}
+
 		qosConfig := conf.QoSConfiguration
 		qosLevel, err := qosConfig.GetQoSLevelForPod(pod)
 		if err != nil {
@@ -177,19 +187,20 @@ func applyMemSoftLimitQoSLevelConfig(conf *coreconfig.Configuration,
 				general.Warningf("GetContainerRelativeCgroupPath failed, pod=%v, container=%v, err=%v", podUID, containerID, err)
 				continue
 			}
+
 			var softLimit uint64 = 1
-			if ratio != 0 {
-				softLimit, err = calculateMemSoftLimit(relCgPath, uint64(ratio))
-				if err != nil {
-					general.Errorf("calculateMemSoftLimit for relativeCgPath: %s failed with error: %v",
-						relCgPath, err)
-					continue
+			if enable {
+				if ratio != 0 {
+					softLimit, err = calculateMemSoftLimit(relCgPath, uint64(ratio))
+					if err != nil {
+						general.Errorf("calculateMemSoftLimit for relativeCgPath: %s failed with error: %v", relCgPath, err)
+						continue
+					}
 				}
 			}
 
 			// OK. Set the value for memory.low.
-			var data *cgroupcm.MemoryData
-			data = &cgroupcm.MemoryData{SoftLimitInBytes: int64(softLimit)}
+			data := &cgroupcm.MemoryData{SoftLimitInBytes: int64(softLimit)}
 			if err := cgroupmgr.ApplyMemoryWithRelativePath(relCgPath, data); err != nil {
 				general.Warningf("ApplyMemoryWithRelativePath failed, cgpath=%v, err=%v", relCgPath, err)
 				continue
@@ -223,6 +234,10 @@ func MemProtectionTaskFunc(conf *coreconfig.Configuration,
 	// SettingMemProtection featuregate.
 	if !conf.EnableSettingMemProtection {
 		general.Infof("EnableSettingMemProtection disabled")
+		initializeOnce.Do(func() {
+			applyMemSoftLimitQoSLevelConfig(conf, emitter, metaServer, false)
+			applyMemSoftLimitCgroupLevelConfig(conf, emitter, false)
+		})
 		return
 	}
 
@@ -234,11 +249,11 @@ func MemProtectionTaskFunc(conf *coreconfig.Configuration,
 
 	// checking qos-level memory.low configuration.
 	if len(conf.MemSoftLimitQoSLevelConfigFile) > 0 {
-		applyMemSoftLimitQoSLevelConfig(conf, emitter, metaServer)
+		applyMemSoftLimitQoSLevelConfig(conf, emitter, metaServer, true)
 	}
 
 	// checking cgroup-level memory.low configuration.
 	if len(conf.MemSoftLimitCgroupLevelConfigFile) > 0 {
-		applyMemSoftLimitCgroupLevelConfig(conf, emitter)
+		applyMemSoftLimitCgroupLevelConfig(conf, emitter, true)
 	}
 }
