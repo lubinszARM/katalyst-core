@@ -101,17 +101,40 @@ func applyIOWeightQoSLevelConfig(conf *coreconfig.Configuration,
 		if !ok {
 			continue
 		}
+
+		// setup pod level.
+		podAbsCGPath, err := common.GetPodAbsCgroupPath(common.CgroupSubsysIO, string(pod.UID))
+		if err != nil {
+			general.Errorf("GetPodAbsCgroupPath for pod: %s/%s failed with error: %v",
+				pod.Namespace, pod.Name, err)
+			continue
+		}
+
+		ioWeightValue, err := strconv.ParseInt(qosLevelDefaultValue, 10, 64)
+		if err != nil {
+			general.Warningf("strconv.ParseInt failed, string=%v, err=%v", qosLevelDefaultValue, err)
+			continue
+		}
+		err = cgroupmgr.ApplyIOWeightWithAbsolutePath(podAbsCGPath, defaultDevID, uint64(ioWeightValue))
+		if err != nil {
+			general.Errorf("ApplyIOWeightWithAbsolutePath for pod: %s/%s failed with error: %v",
+				pod.Namespace, pod.Name, err)
+			continue
+		} else {
+			general.Infof("ApplyIOWeightWithRelativePath for pod: %s/%s, weight: %d successfully",
+				pod.Namespace, pod.Name, ioWeightValue)
+		}
+		_ = emitter.StoreInt64(metricNameIOWeight, int64(ioWeightValue), metrics.MetricTypeNameRaw,
+			metrics.ConvertMapToTags(map[string]string{
+				"cgPath": podAbsCGPath,
+			})...)
+
+		// setup contaienr level.
 		for _, containerStatus := range pod.Status.ContainerStatuses {
 			podUID, containerID := string(pod.UID), native.TrimContainerIDPrefix(containerStatus.ContainerID)
 			err := cgroupmgr.ApplyUnifiedDataForContainer(podUID, containerID, extraControlKnobConfigs[controlKnobKeyIOWeight].CgroupSubsysName, cgroupIOWeightName, qosLevelDefaultValue)
 			if err != nil {
 				general.Warningf("ApplyUnifiedDataForContainer failed:%v", err)
-				continue
-			}
-
-			ioWeightValue, err := strconv.ParseInt(qosLevelDefaultValue, 10, 64)
-			if err != nil {
-				general.Warningf("strconv.ParseInt failed, string=%v, err=%v", qosLevelDefaultValue, err)
 				continue
 			}
 
