@@ -34,6 +34,7 @@ type IOOptions struct {
 
 type WritebackThrottlingOption struct {
 	EnableSettingWBT bool
+	WBTStrictMode    bool
 	WBTValueHDD      int
 	WBTValueSSD      int
 }
@@ -55,6 +56,7 @@ func NewIOOptions() *IOOptions {
 		PolicyName: "static",
 		WritebackThrottlingOption: WritebackThrottlingOption{
 			EnableSettingWBT: false,
+			WBTStrictMode:    true,
 			WBTValueHDD:      75000,
 			WBTValueSSD:      2000,
 		},
@@ -78,6 +80,8 @@ func (o *IOOptions) AddFlags(fss *cliflag.NamedFlagSets) {
 		o.PolicyName, "The policy io resource plugin should use")
 	fs.BoolVar(&o.EnableSettingWBT, "enable-disk-wbt",
 		o.EnableSettingWBT, "if set it to true, disk wbt related control operations will be executed")
+	fs.BoolVar(&o.WBTStrictMode, "enable-wbt-strict-mode",
+		o.WBTStrictMode, "if set it to true, disk wbt related control operations will be executed strictly")
 	fs.IntVar(&o.WBTValueHDD, "disk-wbt-hdd",
 		o.WBTValueHDD, "writeback throttling value for HDD")
 	fs.IntVar(&o.WBTValueSSD, "disk-wbt-ssd",
@@ -99,6 +103,7 @@ func (o *IOOptions) AddFlags(fss *cliflag.NamedFlagSets) {
 func (o *IOOptions) ApplyTo(conf *qrmconfig.IOQRMPluginConfig) error {
 	conf.PolicyName = o.PolicyName
 	conf.EnableSettingWBT = o.EnableSettingWBT
+	conf.WBTStrictMode = o.WBTStrictMode
 	conf.WBTValueHDD = o.WBTValueHDD
 	conf.WBTValueSSD = o.WBTValueSSD
 	conf.EnableSettingIOCost = o.EnableSettingIOCost
