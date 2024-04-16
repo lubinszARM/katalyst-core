@@ -27,6 +27,7 @@ type IOQRMPluginConfig struct {
 
 type WritebackThrottlingOption struct {
 	EnableSettingWBT bool
+	WBTStrictMode    bool
 	WBTValueHDD      int
 	WBTValueSSD      int
 }
