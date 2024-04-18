@@ -45,6 +45,19 @@ func SetWBTLimit(conf *coreconfig.Configuration,
 		general.Errorf("nil metaServer")
 		return
 	}
+
+	if conf.WBTStrictMode {
+		dirty, err := helper.GetNodeMetric(metaServer.MetricsFetcher, emitter, coreconsts.MetricMemDirtySystem)
+		if err != nil {
+			general.Errorf("failed to get dirty memoryt bytes")
+			return
+		}
+
+		if dirty > mem1G {
+			return
+		}
+	}
+
 	dir, err := ioutil.ReadDir(sysDiskPrefix)
 	if err != nil {
 		general.Errorf("failed to readdir:%v, err:%v", sysDiskPrefix, err)
