@@ -21,6 +21,7 @@ const EnableSetDirtyMemPeriodicalHandlerName = "SetDirtyMem"
 const (
 	sysDiskPrefix = "/sys/block"
 	wbtSuffix     = "queue/wbt_lat_usec"
+	mem10G        = 10737418240.0
 )
 
 const (
