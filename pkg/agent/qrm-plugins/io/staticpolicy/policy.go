@@ -30,6 +30,7 @@ import (
 	"github.com/kubewharf/katalyst-core/cmd/katalyst-agent/app/agent/qrm"
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/io/handlers/dirtymem"
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/io/handlers/iocost"
+	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/io/handlers/iolatency"
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/io/handlers/ioweight"
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/util"
 	"github.com/kubewharf/katalyst-core/pkg/agent/utilcomponent/periodicalhandler"
@@ -138,6 +139,13 @@ func (p *StaticPolicy) Start() (err error) {
 		iocost.EnableSetIOCostPeriodicalHandlerName, iocost.SetIOCost, 300*time.Second)
 	if err != nil {
 		general.Infof("setIOCost failed, err=%v", err)
+	}
+
+	general.Infof("setIOLatency handler started")
+	err = periodicalhandler.RegisterPeriodicalHandler(qrm.QRMIOPluginPeriodicalHandlerGroupName,
+		iolatency.EnableIOLatencyQoSTaskPeriodicalHandlerName, iolatency.IOLatencyQoSTaskFunc, 300*time.Second)
+	if err != nil {
+		general.Infof("setIOLatency failed, err=%v", err)
 	}
 
 	go wait.Until(func() {
