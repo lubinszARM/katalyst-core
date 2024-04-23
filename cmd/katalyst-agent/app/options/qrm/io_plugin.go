@@ -30,6 +30,7 @@ type IOOptions struct {
 	//DirtyThrottlingOption // option for dirty throttling, it determin the global watermark of dirty memory.
 	IOCostOption
 	IOWeightOption
+	IOLatencyQoSOptions
 }
 
 type WritebackThrottlingOption struct {
@@ -52,6 +53,11 @@ type IOWeightOption struct {
 	IOWeightCgroupLevelConfigFile string
 }
 
+type IOLatencyQoSOptions struct {
+	EnableIOLatencyQoS             bool
+	IOLatencyCgroupLevelConfigFile string
+}
+
 func NewIOOptions() *IOOptions {
 	return &IOOptions{
 		PolicyName: "static",
@@ -71,6 +77,10 @@ func NewIOOptions() *IOOptions {
 			EnableSettingIOWeight:         false,
 			IOWeightQoSLevelConfigFile:    "",
 			IOWeightCgroupLevelConfigFile: "",
+		},
+		IOLatencyQoSOptions: IOLatencyQoSOptions{
+			EnableIOLatencyQoS:             false,
+			IOLatencyCgroupLevelConfigFile: "",
 		},
 	}
 }
@@ -102,6 +112,10 @@ func (o *IOOptions) AddFlags(fss *cliflag.NamedFlagSets) {
 		o.IOWeightQoSLevelConfigFile, "the absolute path of io.weight qos config file")
 	fs.StringVar(&o.IOWeightCgroupLevelConfigFile, "io-weight-cgroup-config-file",
 		o.IOWeightCgroupLevelConfigFile, "the absolute path of io.weight cgroup config file")
+	fs.BoolVar(&o.EnableIOLatencyQoS, "enable-io-latency-qos",
+		o.EnableIOLatencyQoS, "if set it to true, io.latency qos rules will be executed")
+	fs.StringVar(&o.IOLatencyCgroupLevelConfigFile, "io-latency-cgroup-level-config-file",
+		o.IOLatencyCgroupLevelConfigFile, "the absolute path of cgroup level io latency config file")
 }
 
 func (o *IOOptions) ApplyTo(conf *qrmconfig.IOQRMPluginConfig) error {
@@ -117,5 +131,7 @@ func (o *IOOptions) ApplyTo(conf *qrmconfig.IOQRMPluginConfig) error {
 	conf.EnableSettingIOWeight = o.EnableSettingIOWeight
 	conf.IOWeightQoSLevelConfigFile = o.IOWeightQoSLevelConfigFile
 	conf.IOWeightCgroupLevelConfigFile = o.IOWeightCgroupLevelConfigFile
+	conf.EnableIOLatencyQoS = o.EnableIOLatencyQoS
+	conf.IOLatencyCgroupLevelConfigFile = o.IOLatencyCgroupLevelConfigFile
 	return nil
 }
