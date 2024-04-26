@@ -114,6 +114,31 @@ func reportDevicesIOCostVrate(emitter metrics.MetricEmitter) {
 					Val: devName,
 				})
 		}
+
+		if valueStr, found := ioStat[IOStatMetricCostWait]; found {
+			valueFloat64, err := strconv.ParseFloat(valueStr, 64)
+			if err != nil {
+				general.Errorf("%s value: %s is invalid for devID: %s",
+					IOStatMetricCostWait, valueStr, devID)
+				continue
+			}
+
+			devName, found, err := getDeviceNameFromID(devID)
+			if err != nil {
+				general.Errorf("getDeviceNameFromID: %s failed with error: %v",
+					devID, err)
+				continue
+			} else if !found {
+				general.Errorf("no device name found for device id: %s", devID)
+				continue
+			}
+
+			_ = emitter.StoreFloat64(MetricNameIOCostWait, valueFloat64,
+				metrics.MetricTypeNameRaw, metrics.MetricTag{
+					Key: "device_name",
+					Val: devName,
+				})
+		}
 	}
 }
 

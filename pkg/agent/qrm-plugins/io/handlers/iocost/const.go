@@ -32,8 +32,10 @@ const (
 	sysDiskPrefix = "/sys/block"
 
 	IOStatMetricCostVrate = "cost.vrate"
+	IOStatMetricCostWait  = "cost.wait"
 
 	MetricNameIOCostVrate = "iocost_vrate"
+	MetricNameIOCostWait  = "iocost_wait"
 
 	queueRotationalFilePattern = "/sys/block/%s/queue/rotational"
 )
