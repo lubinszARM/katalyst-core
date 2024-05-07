@@ -34,7 +34,7 @@ import (
 
 func SetWBTLimit(conf *coreconfig.Configuration,
 	emitter metrics.MetricEmitter, metaServer *metaserver.MetaServer) {
-	general.Infof("called")
+	general.Infof("called123")
 	if conf == nil {
 		general.Errorf("nil Conf")
 		return
@@ -56,6 +56,7 @@ func SetWBTLimit(conf *coreconfig.Configuration,
 			continue
 		}
 		wbtValue := 0
+		general.Infof("BBLU diskType:%v:%v:%v..", diskType, coreconsts.DiskTypeNVME, conf.WBTValueNVME)
 		if diskType == coreconsts.DiskTypeHDD {
 			// -1 means skip it.
 			if conf.WBTValueHDD == -1 {
