@@ -411,3 +411,15 @@ func TestApplyIOCostQoSWithDefault(t *testing.T) {
 	// Call the function under test
 	applyIOCostQoSWithDefault(ioCostQoSConfigs, devsIDToModel)
 }
+
+func TestCheckWBTDisabled(t *testing.T) {
+	t.Parallel()
+	metaServer, err := makeMetaServer()
+	assert.NoError(t, err)
+
+	result, _ := checkWBTDisabled(1.0, sysDiskPrefix, metrics.DummyMetrics{}, metaServer)
+	assert.False(t, result)
+
+	result, _ = checkWBTDisabled(1.0, "notExist", metrics.DummyMetrics{}, metaServer)
+	assert.False(t, result)
+}
