@@ -197,8 +197,8 @@ func (m *manager) ApplyIOCostQoS(absCgroupPath string, devID string, data *commo
 	if err, applied, oldData := common.InstrumentedWriteFileIfChange(absCgroupPath, "io.cost.qos", fmt.Sprintf("%s %s", devID, dataContent)); err != nil {
 		return err
 	} else if applied {
-		klog.Infof("[CgroupV2] apply io.cost.qos data successfully,"+
-			"cgroupPath: %s, data: %s, old data: %s\n", absCgroupPath, dataContent, oldData)
+		klog.Infof("[CgroupV2] BBLU apply io.cost.qos data successfully,"+
+			"cgroupPath: %s, data: %s, old data: %s\n", absCgroupPath, fmt.Sprintf("%s %s", devID, dataContent), oldData)
 	}
 
 	return nil
