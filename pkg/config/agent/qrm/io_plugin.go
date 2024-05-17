@@ -34,6 +34,7 @@ type WritebackThrottlingOption struct {
 
 type IOCostOption struct {
 	EnableSettingIOCost   bool
+	IOCostStrictMode      bool
 	IOCostQoSConfigFile   string
 	IOCostModelConfigFile string
 }
