@@ -41,6 +41,7 @@ type WritebackThrottlingOption struct {
 
 type IOCostOption struct {
 	EnableSettingIOCost   bool
+	IOCostStrictMode      bool
 	IOCostQoSConfigFile   string
 	IOCostModelConfigFile string
 }
@@ -62,6 +63,7 @@ func NewIOOptions() *IOOptions {
 		},
 		IOCostOption: IOCostOption{
 			EnableSettingIOCost:   false,
+			IOCostStrictMode:      true,
 			IOCostQoSConfigFile:   "",
 			IOCostModelConfigFile: "",
 		},
@@ -88,6 +90,8 @@ func (o *IOOptions) AddFlags(fss *cliflag.NamedFlagSets) {
 		o.WBTValueNVME, "writeback throttling value for NVME")
 	fs.BoolVar(&o.EnableSettingIOCost, "enable-io-cost",
 		o.EnableSettingIOCost, "if set it to true, io.cost setting will be executed")
+	fs.BoolVar(&o.IOCostStrictMode, "enable-io-cost-strict-mode",
+		o.IOCostStrictMode, "if set it to true, io.cost strict mode setting will be executed")
 	fs.StringVar(&o.IOCostQoSConfigFile, "io-cost-qos-config-file",
 		o.IOCostQoSConfigFile, "the absolute path of io.cost.qos qos config file")
 	fs.StringVar(&o.IOCostModelConfigFile, "io-cost-model-config-file",
@@ -107,6 +111,7 @@ func (o *IOOptions) ApplyTo(conf *qrmconfig.IOQRMPluginConfig) error {
 	conf.WBTValueSSD = o.WBTValueSSD
 	conf.WBTValueNVME = o.WBTValueNVME
 	conf.EnableSettingIOCost = o.EnableSettingIOCost
+	conf.IOCostStrictMode = o.IOCostStrictMode
 	conf.IOCostQoSConfigFile = o.IOCostQoSConfigFile
 	conf.IOCostModelConfigFile = o.IOCostModelConfigFile
 	conf.EnableSettingIOWeight = o.EnableSettingIOWeight
