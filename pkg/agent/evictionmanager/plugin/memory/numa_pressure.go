@@ -40,9 +40,19 @@ import (
 )
 
 const (
+	mem64MBInPages                       = 16384
+	mem2GBInPages                        = 524288
 	EvictionPluginNameNumaMemoryPressure = "numa-memory-pressure-eviction-plugin"
 	EvictionScopeNumaMemory              = "NumaMemory"
 )
+
+// nodeWatermarkInfo holds memory watermark info parsed from /proc/zoneinfo directly.
+type nodeWatermarkInfo struct {
+	node int64
+	free uint64
+	min  uint64
+	low  uint64
+}
 
 // NewNumaMemoryPressureEvictionPlugin returns a new MemoryPressureEvictionPlugin
 func NewNumaMemoryPressureEvictionPlugin(_ *client.GenericClientSet, _ events.EventRecorder,
@@ -113,33 +123,55 @@ func (n *NumaMemoryPressurePlugin) ThresholdMet(_ context.Context) (*pluginapi.T
 
 func (n *NumaMemoryPressurePlugin) detectNumaPressures() {
 	n.isUnderNumaPressure = false
+	// get memory watermark directly from /proc/zoneinfo
+	zoneinfo := ReadZoneinfo()
+
 	for _, numaID := range n.metaServer.CPUDetails.NUMANodes().ToSliceNoSortInt() {
 		n.numaActionMap[numaID] = actionNoop
 		if _, ok := n.numaFreeBelowWatermarkTimesMap[numaID]; !ok {
 			n.numaFreeBelowWatermarkTimesMap[numaID] = 0
 		}
 
-		if err := n.detectNumaWatermarkPressure(numaID); err != nil {
-			continue
+		// Check if the zoneinfo contains the corresponding numaID
+		// Notice: the unit of free/min/low from zoneinfo is pages.
+		if numaID < len(zoneinfo) && zoneinfo[numaID].node == int64(numaID) {
+			if err := n.detectNumaWatermarkPressure(numaID, int(zoneinfo[numaID].free), int(zoneinfo[numaID].min), int(zoneinfo[numaID].low)); err != nil {
+				continue
+			}
+		} else {
+			// If there is no watermark info in zoneinfo, fall back to applying info from metaServer
+			if err := n.detectNumaWatermarkPressure(numaID, 0, 0, 0); err != nil {
+				continue
+			}
 		}
 	}
 }
 
-func (n *NumaMemoryPressurePlugin) detectNumaWatermarkPressure(numaID int) error {
-	free, total, scaleFactor, err := helper.GetWatermarkMetrics(n.metaServer.MetricsFetcher, n.emitter, numaID)
-	if err != nil {
-		general.Errorf("failed to getWatermarkMetrics for numa %d, err: %v", numaID, err)
-		_ = n.emitter.StoreInt64(metricsNameFetchMetricError, 1, metrics.MetricTypeNameCount,
-			metrics.ConvertMapToTags(map[string]string{
-				metricsTagKeyNumaID: strconv.Itoa(numaID),
-			})...)
-		return err
+func (n *NumaMemoryPressurePlugin) isUnderAdditionalPressure(free, min, low int) bool {
+	return free < (min+low)/2 || (low > mem2GBInPages && free < (low-mem2GBInPages)) || free < (min+mem2GBInPages)
+}
+
+func (n *NumaMemoryPressurePlugin) detectNumaWatermarkPressure(numaID, free, min, low int) error {
+	if low <= 0 {
+		// If there is no watermark info in zoneinfo, fall back to applying info from metaServer
+		// Notice: the unit of freeMem here is bytes.
+		freeBytes, totalBytes, scaleFactor, err := helper.GetWatermarkMetrics(n.metaServer.MetricsFetcher, n.emitter, numaID)
+		if err != nil {
+			general.Errorf("failed to getWatermarkMetrics for numa %d, err: %v", numaID, err)
+			_ = n.emitter.StoreInt64(metricsNameFetchMetricError, 1, metrics.MetricTypeNameCount,
+				metrics.ConvertMapToTags(map[string]string{
+					metricsTagKeyNumaID: strconv.Itoa(numaID),
+				})...)
+			return err
+		}
+		free = general.BytesToPages(int(freeBytes))
+		low = general.BytesToPages(int(totalBytes * scaleFactor / 10000))
 	}
 
 	dynamicConfig := n.dynamicConfig.GetDynamicConfiguration()
 	general.Infof("numa watermark metrics of ID: %d, "+
-		"free: %+v, total: %+v, scaleFactor: %+v, numaFreeBelowWatermarkTimes: %+v, numaFreeBelowWatermarkTimesThreshold: %+v",
-		numaID, free, total, scaleFactor, n.numaFreeBelowWatermarkTimesMap[numaID],
+		"free pages: %+v, min pages: %+v, low pages: %+v, numaFreeBelowWatermarkTimes: %+v, numaFreeBelowWatermarkTimesThreshold: %+v",
+		numaID, free, min, low, n.numaFreeBelowWatermarkTimesMap[numaID],
 		dynamicConfig.NumaFreeBelowWatermarkTimesThreshold)
 	_ = n.emitter.StoreFloat64(metricsNameNumaMetric, float64(n.numaFreeBelowWatermarkTimesMap[numaID]), metrics.MetricTypeNameRaw,
 		metrics.ConvertMapToTags(map[string]string{
@@ -147,10 +179,22 @@ func (n *NumaMemoryPressurePlugin) detectNumaWatermarkPressure(numaID int) error
 			metricsTagKeyMetricName: metricsTagValueNumaFreeBelowWatermarkTimes,
 		})...)
 
-	if free < total*scaleFactor/10000 {
+	// add a compensation to prevent the shaking
+	low += mem64MBInPages
+	if free < low {
 		n.isUnderNumaPressure = true
 		n.numaActionMap[numaID] = actionReclaimedEviction
 		n.numaFreeBelowWatermarkTimesMap[numaID]++
+
+		// avoid excessive pressure on LRU spinlock in kswapd
+		if n.numaFreeBelowWatermarkTimesMap[numaID] > 2 && n.isUnderAdditionalPressure(free, min, low) {
+			n.numaFreeBelowWatermarkTimesMap[numaID]++
+		}
+
+		// avoid global direct memory reclaiming
+		if free < (min + mem64MBInPages) {
+			n.numaFreeBelowWatermarkTimesMap[numaID]++
+		}
 	} else {
 		n.numaFreeBelowWatermarkTimesMap[numaID] = 0
 	}
