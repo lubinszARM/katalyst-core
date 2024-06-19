@@ -37,6 +37,7 @@ import (
 	"github.com/kubewharf/katalyst-core/pkg/metaserver"
 	"github.com/kubewharf/katalyst-core/pkg/metaserver/agent/metric/helper"
 	"github.com/kubewharf/katalyst-core/pkg/metrics"
+	"github.com/kubewharf/katalyst-core/pkg/util/cgroup/common"
 	"github.com/kubewharf/katalyst-core/pkg/util/general"
 	"github.com/kubewharf/katalyst-core/pkg/util/native"
 	"github.com/kubewharf/katalyst-core/pkg/util/process"
@@ -89,7 +90,10 @@ type SystemPressureEvictionPlugin struct {
 	kswapdStealPreviousCycle       float64
 	kswapdStealPreviousCycleTime   time.Time
 	kswapdStealRateExceedStartTime *time.Time
-	lastEvictionTime               time.Time
+
+	memHighPSIHitThresAt time.Time
+
+	lastEvictionTime time.Time
 }
 
 func (s *SystemPressureEvictionPlugin) Name() string {
@@ -149,9 +153,12 @@ func (s *SystemPressureEvictionPlugin) detectSystemPressures(_ context.Context) 
 	s.isUnderSystemPressure = false
 	s.systemAction = actionNoop
 
-	err = s.detectSystemWatermarkPressure()
-	err = s.detectSystemKswapdStealPressure()
-
+	if common.CheckCgroup2UnifiedMode() {
+		err = s.detectOnlineMemPSI()
+	} else {
+		err = s.detectSystemWatermarkPressure()
+		err = s.detectSystemKswapdStealPressure()
+	}
 	switch s.systemAction {
 	case actionReclaimedEviction:
 		_ = s.emitter.StoreInt64(metricsNameThresholdMet, 1, metrics.MetricTypeNameCount,
@@ -168,6 +175,44 @@ func (s *SystemPressureEvictionPlugin) detectSystemPressures(_ context.Context) 
 				metricsTagKeyAction:         metricsTagValueActionEviction,
 			})...)
 	}
+}
+
+func (s *SystemPressureEvictionPlugin) detectOnlineMemPSI() error {
+	fileName := "/sys/fs/cgroup/kubepods/burstable/memory.pressure"
+	pressure, err := readRespressureFromFile(fileName, FULL)
+	if err != nil {
+		general.Infof("detectOnlineMemPSI rror:", err)
+		s.memHighPSIHitThresAt = time.Time{}
+		return err
+	}
+
+	now := time.Now()
+
+	if pressure.Avg10 >= 50 {
+		if s.memHighPSIHitThresAt.IsZero() {
+			s.memHighPSIHitThresAt = now
+		}
+
+		diff := now.Sub(s.memHighPSIHitThresAt).Seconds()
+
+		if int64(diff) >= 30 {
+			s.isUnderSystemPressure = true
+			s.systemAction = actionReclaimedEviction
+			general.Infof("online mem.psi thresholdMet: psi=%+v, duration=%+v", pressure.Avg10, int64(diff))
+		}
+		/*
+			if int64(diff) >= 100 {
+				s.isUnderSystemPressure = true
+				s.systemAction = actionEviction
+			}
+		*/
+	} else {
+		if pressure.Avg10 > 10 {
+			general.Infof("BBLU online mem.psi: psi=%+v", pressure.Avg10)
+		}
+		s.memHighPSIHitThresAt = time.Time{}
+	}
+	return nil
 }
 
 func (s *SystemPressureEvictionPlugin) detectSystemWatermarkPressure() error {
