@@ -25,10 +25,15 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/sets"
+)
+
+const (
+	DefaultPageSize = 4096
 )
 
 func Max(a, b int) int {
@@ -362,6 +367,19 @@ func CovertUInt64ToInt(numUInt64 uint64) (int, error) {
 		return 0, fmt.Errorf("convert numUInt64: %d to numInt: %d failed", numUInt64, numInt)
 	}
 	return numInt, nil
+}
+
+func GetPageSize() int {
+	pageSize := syscall.Getpagesize()
+	if pageSize == 0 {
+		return DefaultPageSize
+	}
+	return pageSize
+}
+
+func BytesToPages(bytes int) int {
+	pageSize := GetPageSize()
+	return (bytes + pageSize - 1) / pageSize // Ceiling division to account for partial pages
 }
 
 // Clamp returns value itself if min < value < max; min if value < min; max if value > max

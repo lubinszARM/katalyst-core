@@ -78,6 +78,10 @@ func TestNewNumaPressureEvictionPlugin(t *testing.T) {
 func TestNumaMemoryPressurePlugin_ThresholdMet(t *testing.T) {
 	t.Parallel()
 
+	original := hostZoneinfoFile
+	hostZoneinfoFile = "test"
+	defer func() { hostZoneinfoFile = original }()
+
 	plugin, err := makeNumaPressureEvictionPlugin(makeConf())
 	assert.NoError(t, err)
 	assert.NotNil(t, plugin)
