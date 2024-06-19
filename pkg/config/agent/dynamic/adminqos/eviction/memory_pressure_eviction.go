@@ -35,7 +35,7 @@ const (
 	DefaultEnableSystemLevelEviction = true
 	// DefaultNumaVictimMinimumUtilizationThreshold is the victim's minimum memory usage on a NUMA node, if a pod
 	// uses less memory on a NUMA node than this threshold,it won't be evicted by this NUMA's memory pressure.
-	DefaultNumaVictimMinimumUtilizationThreshold = 0.001
+	DefaultNumaVictimMinimumUtilizationThreshold = 0.0005
 	// DefaultNumaFreeBelowWatermarkTimesThreshold is the default threshold for the number of times
 	// that NUMA's free memory falls below the watermark
 	DefaultNumaFreeBelowWatermarkTimesThreshold = 4

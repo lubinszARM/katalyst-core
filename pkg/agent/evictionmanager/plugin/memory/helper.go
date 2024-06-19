@@ -17,7 +17,11 @@ limitations under the License.
 package memory
 
 import (
+	"bufio"
+	"fmt"
+	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	v1 "k8s.io/api/core/v1"
@@ -162,4 +166,45 @@ func (e *EvictionHelper) getEvictionCmpFuncs(rankingMetrics []string, numaID int
 	}
 
 	return cmpFuncs
+}
+
+func readPgscanFromFile(fileName string) (uint64, error) {
+	// Open the file
+	file, err := os.Open(fileName)
+	if err != nil {
+		return 0, fmt.Errorf("failed to open file: %w", err)
+	}
+	defer file.Close()
+
+	// Initialize the variable to store pgscan value
+	var pgscanValue uint64
+
+	// Read the file line by line
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		// Split the line into key and value
+		parts := strings.Fields(line)
+		if len(parts) != 2 {
+			continue
+		}
+		key := parts[0]
+		value := parts[1]
+
+		// Check if the key is pgscan
+		if key == "pgscan" {
+			// Convert the value to an integer
+			pgscanValue, err = strconv.ParseUint(value, 10, 64)
+			if err != nil {
+				return 0, fmt.Errorf("failed to parse pgscan value: %w", err)
+			}
+			break
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return 0, fmt.Errorf("error reading file: %w", err)
+	}
+
+	return pgscanValue, nil
 }
