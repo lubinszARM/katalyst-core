@@ -238,6 +238,16 @@ func (m *manager) GetMemory(absCgroupPath string) (*common.MemoryStats, error) {
 	return memoryStats, nil
 }
 
+func (m *manager) GetMemoryPressure(absCgroupPath string, t common.PressureType) (*common.MemoryPressure, error) {
+	memoryPressure := &common.MemoryPressure{
+		Avg10:  0,
+		Avg60:  0,
+		Avg300: 0,
+	}
+
+	return memoryPressure, nil
+}
+
 func (m *manager) GetNumaMemory(absCgroupPath string) (map[int]*common.MemoryNumaMetrics, error) {
 	numaStat, err := common.ParseCgroupNumaValue(absCgroupPath, "memory.numa_stat")
 	if err != nil {
