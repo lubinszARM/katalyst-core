@@ -25,18 +25,23 @@ import (
 	"time"
 
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/events"
 
+	apiconsts "github.com/kubewharf/katalyst-api/pkg/consts"
 	pluginapi "github.com/kubewharf/katalyst-api/pkg/protocol/evictionplugin/v1alpha1"
 	"github.com/kubewharf/katalyst-core/pkg/agent/evictionmanager/plugin"
 	"github.com/kubewharf/katalyst-core/pkg/client"
 	"github.com/kubewharf/katalyst-core/pkg/config"
 	"github.com/kubewharf/katalyst-core/pkg/config/agent/dynamic"
+	"github.com/kubewharf/katalyst-core/pkg/config/generic"
 	"github.com/kubewharf/katalyst-core/pkg/consts"
 	"github.com/kubewharf/katalyst-core/pkg/metaserver"
 	"github.com/kubewharf/katalyst-core/pkg/metaserver/agent/metric/helper"
 	"github.com/kubewharf/katalyst-core/pkg/metrics"
+	"github.com/kubewharf/katalyst-core/pkg/util/cgroup/common"
+	cgroupmgr "github.com/kubewharf/katalyst-core/pkg/util/cgroup/manager"
 	"github.com/kubewharf/katalyst-core/pkg/util/general"
 	"github.com/kubewharf/katalyst-core/pkg/util/native"
 	"github.com/kubewharf/katalyst-core/pkg/util/process"
@@ -46,21 +51,24 @@ const (
 	EvictionPluginNameSystemMemoryPressure = "system-memory-pressure-eviction-plugin"
 	EvictionScopeSystemMemory              = "SystemMemory"
 	evictionConditionMemoryPressure        = "MemoryPressure"
-	syncTolerationTurns                    = 3
+	syncTolerationTurns                    = 1
 )
 
 func NewSystemPressureEvictionPlugin(_ *client.GenericClientSet, _ events.EventRecorder,
 	metaServer *metaserver.MetaServer, emitter metrics.MetricEmitter, conf *config.Configuration,
 ) plugin.EvictionPlugin {
 	p := &SystemPressureEvictionPlugin{
-		pluginName:                EvictionPluginNameSystemMemoryPressure,
-		emitter:                   emitter,
-		StopControl:               process.NewStopControl(time.Time{}),
-		metaServer:                metaServer,
+		pluginName:         EvictionPluginNameSystemMemoryPressure,
+		emitter:            emitter,
+		StopControl:        process.NewStopControl(time.Time{}),
+		metaServer:         metaServer,
+		supportedQosLevels: sets.NewString(apiconsts.PodAnnotationQoSLevelDedicatedCores, apiconsts.PodAnnotationQoSLevelSharedCores),
+
 		evictionManagerSyncPeriod: conf.EvictionManagerSyncPeriod,
 		coolDownPeriod:            conf.SystemPressureCoolDownPeriod,
 		syncPeriod:                time.Duration(conf.SystemPressureSyncPeriod) * time.Second,
 		dynamicConfig:             conf.DynamicAgentConfiguration,
+		qosConf:                   conf.QoSConfiguration,
 		reclaimedPodFilter:        conf.CheckReclaimedQoSForPod,
 		evictionHelper:            NewEvictionHelper(emitter, metaServer, conf),
 	}
@@ -79,17 +87,25 @@ type SystemPressureEvictionPlugin struct {
 	pluginName                string
 	metaServer                *metaserver.MetaServer
 	evictionHelper            *EvictionHelper
+	supportedQosLevels        sets.String
 
 	syncPeriod     time.Duration
 	coolDownPeriod int
 	dynamicConfig  *dynamic.DynamicAgentConfiguration
+	qosConf        *generic.QoSConfiguration
 
 	systemAction                   int
 	isUnderSystemPressure          bool
 	kswapdStealPreviousCycle       float64
 	kswapdStealPreviousCycleTime   time.Time
 	kswapdStealRateExceedStartTime *time.Time
-	lastEvictionTime               time.Time
+
+	onlineMemHighPressureHitThresAt time.Time
+
+	onlineMemPgscanLast  uint64
+	onlineMemPgscanTimes uint64
+
+	lastEvictionTime time.Time
 }
 
 func (s *SystemPressureEvictionPlugin) Name() string {
@@ -149,9 +165,13 @@ func (s *SystemPressureEvictionPlugin) detectSystemPressures(_ context.Context) 
 	s.isUnderSystemPressure = false
 	s.systemAction = actionNoop
 
-	err = s.detectSystemWatermarkPressure()
-	err = s.detectSystemKswapdStealPressure()
-
+	if common.CheckCgroup2UnifiedMode() {
+		err = s.detectOnlineMemPSI()
+		//err = s.detectOnlineMemReclaim()
+	} else {
+		err = s.detectSystemWatermarkPressure()
+		err = s.detectSystemKswapdStealPressure()
+	}
 	switch s.systemAction {
 	case actionReclaimedEviction:
 		_ = s.emitter.StoreInt64(metricsNameThresholdMet, 1, metrics.MetricTypeNameCount,
@@ -168,6 +188,107 @@ func (s *SystemPressureEvictionPlugin) detectSystemPressures(_ context.Context) 
 				metricsTagKeyAction:         metricsTagValueActionEviction,
 			})...)
 	}
+}
+
+func (s *SystemPressureEvictionPlugin) detectOnlineMemPSI() error {
+	fileName := "/sys/fs/cgroup/kubepods/burstable/memory.pressure"
+	pressure, err := cgroupmgr.GetMemoryPressureWithAbsolutePath(fileName, common.SOME)
+	if err != nil {
+		general.Infof("detectOnlineMemPSI rror:", err)
+		s.onlineMemHighPressureHitThresAt = time.Time{}
+		return err
+	}
+
+	now := time.Now()
+
+	if pressure.Avg10 >= 10 {
+		// calculate the mem.pressure of high qos jobs.
+		ctx := context.Background()
+		podList, err := s.metaServer.GetPodList(ctx, native.PodIsActive)
+		if err != nil {
+			general.Infof("get pod list failed: %v", err)
+			return err
+		}
+
+		var totalAvg10, avgAvg10, count uint64
+		for _, pod := range podList {
+			if pod == nil {
+				continue
+			}
+
+			qosLevel, err := s.qosConf.GetQoSLevelForPod(pod)
+			if err != nil {
+				general.Errorf("get qos level failed for pod %+v/%+v, skip check rss overuse, err: %v", pod.Namespace, pod.Name, err)
+				continue
+			}
+
+			if !s.supportedQosLevels.Has(qosLevel) {
+				continue
+			}
+
+			podUID := string(pod.UID)
+			absPath, err := common.GetPodAbsCgroupPath(common.CgroupSubsysMemory, podUID)
+			if err != nil {
+				continue
+			}
+			memPressure, err := cgroupmgr.GetMemoryPressureWithAbsolutePath(absPath, common.SOME)
+			if err != nil {
+				continue
+			}
+
+			if memPressure.Avg10 > 1 {
+				general.Infof("BBLU0 online some.psi:%v, count=%d.\n", memPressure.Avg10, count)
+			}
+			totalAvg10 += memPressure.Avg10
+			count++
+		}
+
+		if count > 0 {
+			avgAvg10 = totalAvg10 / count
+		}
+
+		if avgAvg10 > 15 {
+			if s.onlineMemHighPressureHitThresAt.IsZero() {
+				s.onlineMemHighPressureHitThresAt = now
+			}
+
+			diff := now.Sub(s.onlineMemHighPressureHitThresAt).Seconds()
+			if int64(diff) >= 30 {
+				s.isUnderSystemPressure = true
+				s.systemAction = actionReclaimedEviction
+				general.Infof("BBLU1 online mem.psi thresholdMet: psi=%+v, duration=%+v", avgAvg10, int64(diff))
+			}
+		}
+	} else {
+		if pressure.Avg10 > 0 {
+			general.Infof("BBLU-SOME online mem.psi: psi=%+v", pressure.Avg10)
+		}
+		s.onlineMemHighPressureHitThresAt = time.Time{}
+	}
+	return nil
+}
+
+func (s *SystemPressureEvictionPlugin) detectOnlineMemReclaim() error {
+	fileName := "/sys/fs/cgroup/kubepods/burstable/memory.stat"
+	pgscan, err := readPgscanFromFile(fileName)
+	if err != nil {
+		general.Infof("readPgscanFromFile rror:", err)
+		s.onlineMemPgscanTimes = 0
+		return err
+	}
+
+	if pgscan > s.onlineMemPgscanLast {
+		s.onlineMemPgscanTimes++
+		s.onlineMemPgscanLast = pgscan
+	} else {
+		s.onlineMemPgscanTimes = 0
+	}
+
+	if s.onlineMemPgscanTimes > 2 {
+		general.Infof("BBLU online mem.pgscan duration:%v", s.onlineMemPgscanTimes)
+	}
+
+	return nil
 }
 
 func (s *SystemPressureEvictionPlugin) detectSystemWatermarkPressure() error {
