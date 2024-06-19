@@ -195,8 +195,8 @@ func (n *NumaMemoryPressurePlugin) detectNumaWatermarkPressure(numaID, free, min
 		})...)
 
 	if free < low {
-		n.isUnderNumaPressure = true
 		if n.numaFreeBelowWatermarkTimesMap[numaID] > 2 {
+			n.isUnderNumaPressure = true
 			n.numaActionMap[numaID] = actionReclaimedEviction
 		}
 		n.numaFreeBelowWatermarkTimesMap[numaID]++
