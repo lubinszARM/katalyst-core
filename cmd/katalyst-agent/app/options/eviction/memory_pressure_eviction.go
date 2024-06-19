@@ -35,7 +35,7 @@ type MemoryPressureEvictionOptions struct {
 // NewMemoryPressureEvictionOptions returns a new MemoryPressureEvictionOptions
 func NewMemoryPressureEvictionOptions() *MemoryPressureEvictionOptions {
 	return &MemoryPressureEvictionOptions{
-		SystemPressureSyncPeriod: 30,
+		SystemPressureSyncPeriod: 10,
 		// make sure the cool down period is greater than sync period in case it triggers many times eviction between
 		// two rounds of sync
 		SystemPressureCoolDownPeriod: 35,
