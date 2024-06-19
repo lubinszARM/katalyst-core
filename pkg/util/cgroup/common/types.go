@@ -162,6 +162,20 @@ type MemoryStats struct {
 	Usage uint64
 }
 
+type PressureType int
+
+const (
+	SOME PressureType = iota
+	FULL
+)
+
+// MemoryPressure get cgroup memory pressure
+type MemoryPressure struct {
+	Avg10  uint64
+	Avg60  uint64
+	Avg300 uint64
+}
+
 // CPUStats get cgroup cpu data
 type CPUStats struct {
 	CpuPeriod uint64
