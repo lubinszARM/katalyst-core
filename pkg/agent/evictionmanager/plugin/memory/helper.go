@@ -17,7 +17,12 @@ limitations under the License.
 package memory
 
 import (
+	"bufio"
+	"errors"
+	"fmt"
+	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	v1 "k8s.io/api/core/v1"
@@ -61,7 +66,7 @@ const (
 	metricsTagKeyMetricName     = "metric_name"
 
 	metricsTagValueDetectionLevelNuma             = "numa"
-	metricsTagValueDetectionLevelSystem           = "system"
+	metricsTagValueDetectionLevelSystem           = "system_psi"
 	metricsTagValueActionReclaimedEviction        = "reclaimed_eviction"
 	metricsTagValueActionEviction                 = "eviction"
 	metricsTagValueNumaFreeBelowWatermarkTimes    = "numa_free_below_watermark_times"
@@ -162,4 +167,187 @@ func (e *EvictionHelper) getEvictionCmpFuncs(rankingMetrics []string, numaID int
 	}
 
 	return cmpFuncs
+}
+
+type PressureType int
+
+const (
+	SOME PressureType = iota
+	FULL
+)
+
+func pressureTypeToString(t PressureType) string {
+	switch t {
+	case SOME:
+		return "some"
+	case FULL:
+		return "full"
+	default:
+		panic("unreachable")
+	}
+}
+
+type PsiFormat int
+
+const (
+	UPSTREAM PsiFormat = iota
+	EXPERIMENTAL
+	MISSING
+	INVALID
+)
+
+type ResourcePressure struct {
+	Avg10  float64
+	Avg60  float64
+	Avg300 float64
+	Total  *time.Duration
+}
+
+func getPsiFormat(lines []string) PsiFormat {
+	// Dummy implementation for getPsiFormat
+	// You should replace this with your actual implementation
+	if strings.Contains(lines[0], "avg10") {
+		return UPSTREAM
+	} else if strings.Contains(lines[0], "aggr") {
+		return EXPERIMENTAL
+	} else if len(lines) == 0 {
+		return MISSING
+	}
+	return INVALID
+}
+
+func split(s, sep string) []string {
+	return strings.Split(s, sep)
+}
+
+func readRespressureFromFile(fileName string, t PressureType) (ResourcePressure, error) {
+	file, err := os.Open(fileName)
+	if err != nil {
+		return ResourcePressure{}, err
+	}
+	defer file.Close()
+
+	var lines []string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+	if err := scanner.Err(); err != nil {
+		return ResourcePressure{}, err
+	}
+
+	return readRespressureFromLines(lines, t)
+}
+
+func readRespressureFromLines(lines []string, t PressureType) (ResourcePressure, error) {
+	typeName := pressureTypeToString(t)
+	var pressureLineIndex int
+	switch t {
+	case SOME:
+		pressureLineIndex = 0
+	case FULL:
+		pressureLineIndex = 1
+	}
+
+	switch getPsiFormat(lines) {
+	case UPSTREAM:
+		toks := split(lines[pressureLineIndex], " ")
+		if toks[0] != typeName {
+			return ResourcePressure{}, errors.New("invalid type name")
+		}
+		avg10 := split(toks[1], "=")
+		if avg10[0] != "avg10" {
+			return ResourcePressure{}, errors.New("invalid avg10 format")
+		}
+		avg60 := split(toks[2], "=")
+		if avg60[0] != "avg60" {
+			return ResourcePressure{}, errors.New("invalid avg60 format")
+		}
+		avg300 := split(toks[3], "=")
+		if avg300[0] != "avg300" {
+			return ResourcePressure{}, errors.New("invalid avg300 format")
+		}
+		total := split(toks[4], "=")
+		if total[0] != "total" {
+			return ResourcePressure{}, errors.New("invalid total format")
+		}
+
+		totalMicroseconds, err := strconv.ParseUint(total[1], 10, 64)
+		if err != nil {
+			return ResourcePressure{}, err
+		}
+		totalDuration := time.Duration(totalMicroseconds) * time.Microsecond
+
+		return ResourcePressure{
+			Avg10:  atof(avg10[1]),
+			Avg60:  atof(avg60[1]),
+			Avg300: atof(avg300[1]),
+			Total:  &totalDuration,
+		}, nil
+
+	case EXPERIMENTAL:
+		toks := split(lines[pressureLineIndex+1], " ")
+		if toks[0] != typeName {
+			return ResourcePressure{}, errors.New("invalid type name")
+		}
+
+		return ResourcePressure{
+			Avg10:  atof(toks[1]),
+			Avg60:  atof(toks[2]),
+			Avg300: atof(toks[3]),
+			Total:  nil,
+		}, nil
+
+	case MISSING:
+		return ResourcePressure{}, errors.New("missing control file")
+	case INVALID:
+		return ResourcePressure{}, errors.New("invalid format")
+	}
+	return ResourcePressure{}, errors.New("unreachable")
+}
+
+func atof(s string) float64 {
+	f, _ := strconv.ParseFloat(s, 64)
+	return f
+}
+
+func readPgscanFromFile(fileName string) (uint64, error) {
+	// Open the file
+	file, err := os.Open(fileName)
+	if err != nil {
+		return 0, fmt.Errorf("failed to open file: %w", err)
+	}
+	defer file.Close()
+
+	// Initialize the variable to store pgscan value
+	var pgscanValue uint64
+
+	// Read the file line by line
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		// Split the line into key and value
+		parts := strings.Fields(line)
+		if len(parts) != 2 {
+			continue
+		}
+		key := parts[0]
+		value := parts[1]
+
+		// Check if the key is pgscan
+		if key == "pgscan" {
+			// Convert the value to an integer
+			pgscanValue, err = strconv.ParseUint(value, 10, 64)
+			if err != nil {
+				return 0, fmt.Errorf("failed to parse pgscan value: %w", err)
+			}
+			break
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return 0, fmt.Errorf("error reading file: %w", err)
+	}
+
+	return pgscanValue, nil
 }
