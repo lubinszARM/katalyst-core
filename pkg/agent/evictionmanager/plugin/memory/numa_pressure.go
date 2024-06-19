@@ -41,10 +41,9 @@ import (
 )
 
 const (
-	mem256MBInPages                      = 65536
+	mem64MBInPages                       = 16348
 	mem512MBInPages                      = 131072
 	mem1GBInPages                        = 262144
-	mem2GBInPages                        = 524288
 	EvictionPluginNameNumaMemoryPressure = "numa-memory-pressure-eviction-plugin"
 	EvictionScopeNumaMemory              = "NumaMemory"
 )
@@ -137,15 +136,15 @@ func (n *NumaMemoryPressurePlugin) detectNumaPressures() error {
 		// Check if the zoneinfo contains the corresponding numaID
 		// Notice: the unit of free/min/low from zoneinfo is pages.
 		if numaID < len(zoneinfo) && zoneinfo[numaID].node == int64(numaID) {
-			// Add a compensation mechanism to prevent system thrashing due to insufficient file memory
 			low := zoneinfo[numaID].low
-			if zoneinfo[numaID].file_inactive < mem2GBInPages {
+			fileInactive := zoneinfo[numaID].file_inactive
+			// Add a compensation mechanism to prevent system thrashing due to insufficient file memory
+			if fileInactive < low {
 				low += mem512MBInPages
-			} else {
-				if low > mem256MBInPages {
-					low -= mem256MBInPages
-				}
+			} else if low > mem512MBInPages {
+				low -= mem64MBInPages
 			}
+
 			if err := n.detectNumaWatermarkPressure(numaID, int(zoneinfo[numaID].free), int(zoneinfo[numaID].min), int(low)); err != nil {
 				errList = append(errList, err)
 				continue
@@ -195,19 +194,14 @@ func (n *NumaMemoryPressurePlugin) detectNumaWatermarkPressure(numaID, free, min
 		})...)
 
 	if free < low {
-		n.isUnderNumaPressure = true
-		if n.numaFreeBelowWatermarkTimesMap[numaID] > 2 {
+		n.numaFreeBelowWatermarkTimesMap[numaID]++
+		if n.numaFreeBelowWatermarkTimesMap[numaID] > (dynamicConfig.NumaFreeBelowWatermarkTimesThreshold / 2) {
+			n.isUnderNumaPressure = true
 			n.numaActionMap[numaID] = actionReclaimedEviction
 		}
-		n.numaFreeBelowWatermarkTimesMap[numaID]++
 
 		// avoid excessive pressure on LRU spinlock in kswapd
-		if n.numaFreeBelowWatermarkTimesMap[numaID] > 2 && n.isUnderAdditionalPressure(free, min, low) {
-			n.numaFreeBelowWatermarkTimesMap[numaID]++
-		}
-
-		// avoid global direct memory reclaiming
-		if n.numaFreeBelowWatermarkTimesMap[numaID] > 2 && (low > mem1GBInPages && free < (min+mem512MBInPages)) {
+		if n.numaFreeBelowWatermarkTimesMap[numaID] > 3 && n.isUnderAdditionalPressure(free, min, low) {
 			n.numaFreeBelowWatermarkTimesMap[numaID]++
 		}
 	} else {
@@ -292,10 +286,12 @@ func (n *NumaMemoryPressurePlugin) getCandidates(pods []*v1.Pod, numaID int, min
 		pod := pods[i]
 		totalMem, totalMemErr := helper.GetNumaMetric(n.metaServer.MetricsFetcher, n.emitter,
 			consts.MetricMemTotalNuma, numaID)
+		if totalMemErr != nil {
+			continue
+		}
 		usedMem, usedMemErr := helper.GetPodMetric(n.metaServer.MetricsFetcher, n.emitter, pod,
 			consts.MetricsMemTotalPerNumaContainer, numaID)
-		if totalMemErr != nil || usedMemErr != nil {
-			result = append(result, pod)
+		if usedMemErr != nil {
 			continue
 		}
 
