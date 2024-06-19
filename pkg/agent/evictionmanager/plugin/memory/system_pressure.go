@@ -37,6 +37,7 @@ import (
 	"github.com/kubewharf/katalyst-core/pkg/metaserver"
 	"github.com/kubewharf/katalyst-core/pkg/metaserver/agent/metric/helper"
 	"github.com/kubewharf/katalyst-core/pkg/metrics"
+	"github.com/kubewharf/katalyst-core/pkg/util/cgroup/common"
 	"github.com/kubewharf/katalyst-core/pkg/util/general"
 	"github.com/kubewharf/katalyst-core/pkg/util/native"
 	"github.com/kubewharf/katalyst-core/pkg/util/process"
@@ -46,7 +47,7 @@ const (
 	EvictionPluginNameSystemMemoryPressure = "system-memory-pressure-eviction-plugin"
 	EvictionScopeSystemMemory              = "SystemMemory"
 	evictionConditionMemoryPressure        = "MemoryPressure"
-	syncTolerationTurns                    = 3
+	syncTolerationTurns                    = 1
 )
 
 func NewSystemPressureEvictionPlugin(_ *client.GenericClientSet, _ events.EventRecorder,
@@ -89,7 +90,13 @@ type SystemPressureEvictionPlugin struct {
 	kswapdStealPreviousCycle       float64
 	kswapdStealPreviousCycleTime   time.Time
 	kswapdStealRateExceedStartTime *time.Time
-	lastEvictionTime               time.Time
+
+	onlineMemHighPressureHitThresAt time.Time
+
+	onlineMemPgscanLast  uint64
+	onlineMemPgscanTimes uint64
+
+	lastEvictionTime time.Time
 }
 
 func (s *SystemPressureEvictionPlugin) Name() string {
@@ -149,9 +156,13 @@ func (s *SystemPressureEvictionPlugin) detectSystemPressures(_ context.Context) 
 	s.isUnderSystemPressure = false
 	s.systemAction = actionNoop
 
-	err = s.detectSystemWatermarkPressure()
-	err = s.detectSystemKswapdStealPressure()
-
+	if common.CheckCgroup2UnifiedMode() {
+		err = s.detectOnlineMemPSI()
+		//err = s.detectOnlineMemReclaim()
+	} else {
+		err = s.detectSystemWatermarkPressure()
+		err = s.detectSystemKswapdStealPressure()
+	}
 	switch s.systemAction {
 	case actionReclaimedEviction:
 		_ = s.emitter.StoreInt64(metricsNameThresholdMet, 1, metrics.MetricTypeNameCount,
@@ -168,6 +179,66 @@ func (s *SystemPressureEvictionPlugin) detectSystemPressures(_ context.Context) 
 				metricsTagKeyAction:         metricsTagValueActionEviction,
 			})...)
 	}
+}
+
+func (s *SystemPressureEvictionPlugin) detectOnlineMemPSI() error {
+	fileName := "/sys/fs/cgroup/kubepods/burstable/memory.pressure"
+	pressure, err := readRespressureFromFile(fileName, FULL)
+	if err != nil {
+		general.Infof("detectOnlineMemPSI rror:", err)
+		s.onlineMemHighPressureHitThresAt = time.Time{}
+		return err
+	}
+
+	now := time.Now()
+
+	if pressure.Avg10 >= 20 {
+		if s.onlineMemHighPressureHitThresAt.IsZero() {
+			s.onlineMemHighPressureHitThresAt = now
+		}
+
+		diff := now.Sub(s.onlineMemHighPressureHitThresAt).Seconds()
+		if int64(diff) >= 30 {
+			s.isUnderSystemPressure = true
+			s.systemAction = actionReclaimedEviction
+			general.Infof("BBLU1 online mem.psi thresholdMet: psi=%+v, duration=%+v", pressure.Avg10, int64(diff))
+		}
+		/*
+			if int64(diff) >= 100 {
+				s.isUnderSystemPressure = true
+				s.systemAction = actionEviction
+			}
+		*/
+	} else {
+		if pressure.Avg10 > 7 {
+			general.Infof("BBLU2 online mem.psi: psi=%+v", pressure.Avg10)
+		}
+		s.onlineMemHighPressureHitThresAt = time.Time{}
+	}
+	return nil
+}
+
+func (s *SystemPressureEvictionPlugin) detectOnlineMemReclaim() error {
+	fileName := "/sys/fs/cgroup/kubepods/burstable/memory.stat"
+	pgscan, err := readPgscanFromFile(fileName)
+	if err != nil {
+		general.Infof("readPgscanFromFile rror:", err)
+		s.onlineMemPgscanTimes = 0
+		return err
+	}
+
+	if pgscan > s.onlineMemPgscanLast {
+		s.onlineMemPgscanTimes++
+		s.onlineMemPgscanLast = pgscan
+	} else {
+		s.onlineMemPgscanTimes = 0
+	}
+
+	if s.onlineMemPgscanTimes > 2 {
+		general.Infof("BBLU online mem.pgscan duration:%v", s.onlineMemPgscanTimes)
+	}
+
+	return nil
 }
 
 func (s *SystemPressureEvictionPlugin) detectSystemWatermarkPressure() error {
