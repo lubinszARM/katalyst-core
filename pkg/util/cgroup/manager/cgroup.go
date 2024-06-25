@@ -179,6 +179,10 @@ func GetMemoryWithAbsolutePath(absCgroupPath string) (*common.MemoryStats, error
 	return GetManager().GetMemory(absCgroupPath)
 }
 
+func GetDetailedMemoryWithAbsolutePath(absCgroupPath string) (*common.MemoryDetailedStats, error) {
+	return GetManager().GetDetailedMemory(absCgroupPath)
+}
+
 func GetIOCostQoSWithRelativePath(relCgroupPath string) (map[string]*common.IOCostQoSData, error) {
 	absCgroupPath := common.GetAbsCgroupPath(common.CgroupSubsysIO, relCgroupPath)
 	return GetIOCostQoSWithAbsolutePath(absCgroupPath)
