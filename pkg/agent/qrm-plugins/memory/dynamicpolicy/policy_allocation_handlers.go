@@ -29,6 +29,7 @@ import (
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/memory/dynamicpolicy/state"
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/util"
 	"github.com/kubewharf/katalyst-core/pkg/util/asyncworker"
+	"github.com/kubewharf/katalyst-core/pkg/util/cgroup/common"
 	cgroupmgr "github.com/kubewharf/katalyst-core/pkg/util/cgroup/manager"
 	"github.com/kubewharf/katalyst-core/pkg/util/general"
 	"github.com/kubewharf/katalyst-core/pkg/util/machine"
@@ -485,13 +486,23 @@ func (p *DynamicPolicy) adjustAllocationEntries() error {
 
 			dropCacheWorkName := util.GetContainerAsyncWorkName(podUID, containerName,
 				memoryPluginAsyncWorkTopicDropCache)
+
+			dropCacheBytes := GetFullyDropCacheBytes(container)
+			absPath, err := common.GetPodAbsCgroupPath(common.CgroupSubsysMemory, podUID)
+			if err == nil {
+				memStat, err := cgroupmgr.GetDetailedMemoryWithAbsolutePath(absPath)
+				if err == nil {
+					dropCacheBytes = int64(memStat.FileInactive)
+				}
+			}
+
 			// start a asynchronous work to drop cache for the container whose numaset changed and doesn't require numa_binding
 			err = p.defaultAsyncLimitedWorkers.AddWork(
 				&asyncworker.Work{
 					Name:        dropCacheWorkName,
 					UID:         uuid.NewUUID(),
 					Fn:          cgroupmgr.DropCacheWithTimeoutForContainer,
-					Params:      []interface{}{podUID, containerID, dropCacheTimeoutSeconds, GetFullyDropCacheBytes(container)},
+					Params:      []interface{}{podUID, containerID, dropCacheTimeoutSeconds, dropCacheBytes},
 					DeliveredAt: time.Now(),
 				}, asyncworker.DuplicateWorkPolicyOverride)
 			if err != nil {
