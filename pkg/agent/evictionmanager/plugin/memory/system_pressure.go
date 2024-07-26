@@ -231,7 +231,7 @@ func (s *SystemPressureEvictionPlugin) detectWorkloadMemPSI() error {
 		s.workloadMemHighPressureHitThresAt = time.Time{}
 		return err
 	}
-
+	general.Infof("BBLU get pressure.some:%v,%v,%v,%v,%v..\n", pressure, workloadPath, memSomeThreshold, memFullThreshold, duration)
 	now := time.Now()
 	if pressure.Avg10 >= uint64(memSomeThreshold) {
 		// calculate the mem.pressure of high qos jobs.
@@ -269,6 +269,10 @@ func (s *SystemPressureEvictionPlugin) detectWorkloadMemPSI() error {
 			}
 			if memPressure.Avg10 > minMemPressure {
 				pressureCount++
+			}
+
+			if memPressure.Avg10 > 1 {
+				general.Infof("BBLU got pod pressure:%v:%v.\n", memPressure.Avg10, totalAvg10)
 			}
 			totalAvg10 += memPressure.Avg10
 			count++
