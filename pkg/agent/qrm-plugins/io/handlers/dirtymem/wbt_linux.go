@@ -75,6 +75,10 @@ func SetWBTLimit(conf *coreconfig.Configuration,
 				continue
 			}
 			wbtValue = conf.WBTValueNVME
+		} else if diskType == coreconsts.DiskTypeVIRTIO {
+			if conf.WBTValueVIRTIO == -1 {
+				continue
+			}
 		} else {
 			continue // currently, only SSD/HDD/NVME were supported.
 		}
