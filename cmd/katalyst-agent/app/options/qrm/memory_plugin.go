@@ -33,6 +33,7 @@ type MemoryOptions struct {
 	OOMPriorityPinnedMapAbsPath string
 
 	SockMemOptions
+	ResctrlOptions
 }
 
 type SockMemOptions struct {
@@ -41,6 +42,10 @@ type SockMemOptions struct {
 	SetGlobalTCPMemRatio int
 	// SetCgroupTCPMemLimitRatio limit cgroup max tcp memory usage.
 	SetCgroupTCPMemRatio int
+}
+
+type ResctrlOptions struct {
+	EnableSettingResctrl bool
 }
 
 func NewMemoryOptions() *MemoryOptions {
@@ -55,6 +60,9 @@ func NewMemoryOptions() *MemoryOptions {
 			EnableSettingSockMem: false,
 			SetGlobalTCPMemRatio: 20,  // default: 20% * {host total memory}
 			SetCgroupTCPMemRatio: 100, // default: 100% * {cgroup memory}
+		},
+		ResctrlOptions: ResctrlOptions{
+			EnableSettingResctrl: false,
 		},
 	}
 }
@@ -84,6 +92,8 @@ func (o *MemoryOptions) AddFlags(fss *cliflag.NamedFlagSets) {
 		o.SetGlobalTCPMemRatio, "limit global max tcp memory usage")
 	fs.IntVar(&o.SetCgroupTCPMemRatio, "qrm-memory-cgroup-tcpmem-ratio",
 		o.SetCgroupTCPMemRatio, "limit cgroup max tcp memory usage")
+	fs.BoolVar(&o.EnableSettingResctrl, "enable-setting-resctrl",
+		o.EnableSettingResctrl, "if set true, we will enable resctrl setting for pod Level")
 }
 
 func (o *MemoryOptions) ApplyTo(conf *qrmconfig.MemoryQRMPluginConfig) error {
@@ -98,5 +108,6 @@ func (o *MemoryOptions) ApplyTo(conf *qrmconfig.MemoryQRMPluginConfig) error {
 	conf.EnableSettingSockMem = o.EnableSettingSockMem
 	conf.SetGlobalTCPMemRatio = o.SetGlobalTCPMemRatio
 	conf.SetCgroupTCPMemRatio = o.SetCgroupTCPMemRatio
+	conf.EnableSettingResctrl = o.EnableSettingResctrl
 	return nil
 }

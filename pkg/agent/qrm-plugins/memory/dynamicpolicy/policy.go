@@ -41,6 +41,7 @@ import (
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/memory/dynamicpolicy/memoryadvisor"
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/memory/dynamicpolicy/oom"
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/memory/dynamicpolicy/state"
+	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/memory/handlers/resctrl"
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/memory/handlers/sockmem"
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/util"
 	"github.com/kubewharf/katalyst-core/pkg/agent/utilcomponent/periodicalhandler"
@@ -156,6 +157,8 @@ type DynamicPolicy struct {
 	oomPriorityMapPinnedPath string
 	oomPriorityMapLock       sync.Mutex
 	oomPriorityMap           *ebpf.Map
+
+	enableSettingResctrl bool
 }
 
 func NewDynamicPolicy(agentCtx *agent.GenericContext, conf *config.Configuration,
@@ -213,6 +216,7 @@ func NewDynamicPolicy(agentCtx *agent.GenericContext, conf *config.Configuration
 		defaultAsyncLimitedWorkers: asyncworker.NewAsyncLimitedWorkers(memoryPluginAsyncWorkersName, defaultAsyncWorkLimit, wrappedEmitter),
 		enableSettingMemoryMigrate: conf.EnableSettingMemoryMigrate,
 		enableSettingSockMem:       conf.EnableSettingSockMem,
+		enableSettingResctrl:       conf.EnableSettingResctrl,
 		enableMemoryAdvisor:        conf.EnableMemoryAdvisor,
 		memoryAdvisorSocketAbsPath: conf.MemoryAdvisorSocketAbsPath,
 		memoryPluginSocketAbsPath:  conf.MemoryPluginSocketAbsPath,
@@ -391,7 +395,15 @@ func (p *DynamicPolicy) Start() (err error) {
 			general.Infof("setSockMem failed, err=%v", err)
 		}
 	}
-
+	if p.enableSettingResctrl {
+		general.Infof("setResctrl enabled")
+		err := periodicalhandler.RegisterPeriodicalHandlerWithHealthz(memconsts.SetResctrl,
+			general.HealthzCheckStateNotReady, qrm.QRMMemoryPluginPeriodicalHandlerGroupName,
+			resctrl.SetResctrl, 60*time.Second, healthCheckTolerationTimes)
+		if err != nil {
+			general.Infof("setResctrl failed, err=%v", err)
+		}
+	}
 	go wait.Until(func() {
 		periodicalhandler.ReadyToStartHandlersByGroup(qrm.QRMMemoryPluginPeriodicalHandlerGroupName)
 	}, 5*time.Second, p.stopCh)

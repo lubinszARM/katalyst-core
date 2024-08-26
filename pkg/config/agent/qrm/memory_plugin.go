@@ -36,6 +36,8 @@ type MemoryQRMPluginConfig struct {
 
 	// SockMemQRMPluginConfig: the configuration for sockmem limitation in cgroup and host level
 	SockMemQRMPluginConfig
+
+	ResctrlOptions
 }
 
 type SockMemQRMPluginConfig struct {
@@ -45,6 +47,10 @@ type SockMemQRMPluginConfig struct {
 	SetGlobalTCPMemRatio int
 	// SetCgroupTCPMemRatio limit cgroup max tcp memory usage.
 	SetCgroupTCPMemRatio int
+}
+
+type ResctrlOptions struct {
+	EnableSettingResctrl bool
 }
 
 func NewMemoryQRMPluginConfig() *MemoryQRMPluginConfig {
