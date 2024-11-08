@@ -44,6 +44,7 @@ import (
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/cpu/dynamicpolicy/cpueviction"
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/cpu/dynamicpolicy/state"
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/cpu/dynamicpolicy/validator"
+	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/cpu/handlers/cpuweight"
 	cpuutil "github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/cpu/util"
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/util"
 	"github.com/kubewharf/katalyst-core/pkg/agent/utilcomponent/periodicalhandler"
@@ -123,6 +124,7 @@ type DynamicPolicy struct {
 	transitionPeriod                          time.Duration
 	cpuNUMAHintPreferPolicy                   string
 	cpuNUMAHintPreferLowThreshold             float64
+	enableSettingCPUWeight                    bool
 
 	reservedReclaimedCPUsSize                 int
 	reservedReclaimedCPUSet                   machine.CPUSet
@@ -192,6 +194,7 @@ func NewDynamicPolicy(agentCtx *agent.GenericContext, conf *config.Configuration
 		getAdviceInterval:             conf.CPUQRMPluginConfig.GetAdviceInterval,
 		cpuNUMAHintPreferPolicy:       conf.CPUQRMPluginConfig.CPUNUMAHintPreferPolicy,
 		cpuNUMAHintPreferLowThreshold: conf.CPUQRMPluginConfig.CPUNUMAHintPreferLowThreshold,
+		enableSettingCPUWeight:        conf.EnableSettingCPUWeight,
 		reservedCPUs:                  reservedCPUs,
 		extraStateFileAbsPath:         conf.ExtraStateFileAbsPath,
 		enableSyncingCPUIdle:          conf.CPUQRMPluginConfig.EnableSyncingCPUIdle,
@@ -328,6 +331,15 @@ func (p *DynamicPolicy) Start() (err error) {
 	} else if p.cpuAdvisorSocketAbsPath == "" || p.cpuPluginSocketAbsPath == "" {
 		return fmt.Errorf("invalid cpuAdvisorSocketAbsPath: %s or cpuPluginSocketAbsPath: %s",
 			p.cpuAdvisorSocketAbsPath, p.cpuPluginSocketAbsPath)
+	}
+
+	if p.enableSettingCPUWeight {
+		general.Infof("setCPUWeight enabled")
+		err = periodicalhandler.RegisterPeriodicalHandlerWithHealthz(cpuconsts.SyncCPUWeight, general.HealthzCheckStateNotReady,
+			qrm.QRMCPUPluginPeriodicalHandlerGroupName, cpuweight.SetCPUWeight, 1800*time.Second, healthCheckTolerationTimes)
+		if err != nil {
+			general.Errorf("start %v failed,err:%v", cpuconsts.SyncCPUWeight, err)
+		}
 	}
 
 	general.Infof("start dynamic policy cpu plugin with sys-advisor")

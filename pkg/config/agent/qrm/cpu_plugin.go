@@ -28,6 +28,7 @@ type CPUQRMPluginConfig struct {
 
 	CPUDynamicPolicyConfig
 	CPUNativePolicyConfig
+	CPUWeightOptions
 }
 
 type CPUDynamicPolicyConfig struct {
@@ -57,6 +58,11 @@ type CPUNativePolicyConfig struct {
 	EnableFullPhysicalCPUsOnly bool
 	// CPUAllocationOption is the allocation option of cpu (packed/distributed).
 	CPUAllocationOption string
+}
+
+type CPUWeightOptions struct {
+	EnableSettingCPUWeight bool
+	CPUWeightConfigFile    string
 }
 
 func NewCPUQRMPluginConfig() *CPUQRMPluginConfig {
