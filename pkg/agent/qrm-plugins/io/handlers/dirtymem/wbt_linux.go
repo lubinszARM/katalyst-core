@@ -30,7 +30,13 @@ import (
 	"github.com/kubewharf/katalyst-core/pkg/metaserver"
 	"github.com/kubewharf/katalyst-core/pkg/metaserver/agent/metric/helper"
 	"github.com/kubewharf/katalyst-core/pkg/metrics"
+	cgcommon "github.com/kubewharf/katalyst-core/pkg/util/cgroup/common"
+	"github.com/kubewharf/katalyst-core/pkg/util/cgroup/manager"
 	"github.com/kubewharf/katalyst-core/pkg/util/general"
+)
+
+var (
+	ioCgroupRootPath = cgcommon.GetCgroupRootPath(cgcommon.CgroupSubsysIO)
 )
 
 func getWBTValueForDiskType(diskType int, conf *coreconfig.Configuration) (int, bool) {
@@ -57,6 +63,35 @@ func getWBTValueForDiskType(diskType int, conf *coreconfig.Configuration) (int, 
 		return conf.WBTValueVIRTIO, true
 	default:
 		return 0, false // Unsupported disk type
+	}
+}
+
+func disableIOCost(conf *coreconfig.Configuration) {
+	if !cgcommon.CheckCgroup2UnifiedMode() {
+		return
+	}
+
+	devIDToIOCostQoSData, err := manager.GetIOCostQoSWithAbsolutePath(ioCgroupRootPath)
+	if err != nil {
+		general.Errorf("GetIOCostQoSWithAbsolutePath failed with error: %v in Init", err)
+	}
+
+	disabledIOCostQoSData := &cgcommon.IOCostQoSData{Enable: 0}
+	for devID, ioCostQoSData := range devIDToIOCostQoSData {
+		if ioCostQoSData == nil {
+			general.Warningf("nil ioCostQoSData")
+			continue
+		} else if ioCostQoSData.Enable == 0 {
+			general.Warningf("devID: %s ioCostQoS is already disabled", devID)
+			continue
+		}
+
+		err = manager.ApplyIOCostQoSWithAbsolutePath(ioCgroupRootPath, devID, disabledIOCostQoSData)
+		if err != nil {
+			general.Errorf("ApplyIOCostQoSWithAbsolutePath for devID: %s, failed with error: %v", devID, err)
+		} else {
+			general.Infof("disable ioCostQoS for devID: %s successfully", devID)
+		}
 	}
 }
 
@@ -101,6 +136,9 @@ func SetWBTLimit(conf *coreconfig.Configuration,
 
 		wbtFilePath := sysDiskPrefix + "/" + entry.Name() + "/" + wbtSuffix
 		general.Infof("Apply WBT, device=%v, old value=%v, new value=%v", entry.Name(), oldWBTValue, wbtValue)
+		if wbtValue != 0 {
+			disableIOCost(conf)
+		}
 		err = os.WriteFile(wbtFilePath, []byte(fmt.Sprintf("%d", wbtValue)), 0o644)
 		if err != nil {
 			general.Errorf("failed to write new wbt:%v to :%v, err:%v", wbtValue, entry.Name(), err)
