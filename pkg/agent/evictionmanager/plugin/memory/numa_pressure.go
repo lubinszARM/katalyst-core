@@ -217,7 +217,9 @@ func (n *NumaMemoryPressurePlugin) detectNumaWatermarkPressure(numaID, free, min
 			n.numaFreeBelowWatermarkTimesMap[numaID]++
 		}
 	} else {
-		n.numaFreeBelowWatermarkTimesMap[numaID] = 0
+		if n.numaFreeBelowWatermarkTimesMap[numaID] > 0 {
+			n.numaFreeBelowWatermarkTimesMap[numaID]--
+		}
 	}
 	if n.numaFreeBelowWatermarkTimesMap[numaID] >= dynamicConfig.NumaFreeBelowWatermarkTimesThreshold {
 		n.numaActionMap[numaID] = actionEviction
