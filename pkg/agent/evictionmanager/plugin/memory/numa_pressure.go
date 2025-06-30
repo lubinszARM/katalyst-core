@@ -49,6 +49,7 @@ const (
 const (
 	memLowReservePages = 1048576 // 4G
 	memGapPages        = 262144  // 1G
+	memGuardPages      = 131072  // 512M
 
 	minDuration = 3
 )
@@ -145,6 +146,8 @@ func (n *NumaMemoryPressurePlugin) detectNumaPressures() error {
 			low := zoneinfo[numaID].Low
 			fileInactive := zoneinfo[numaID].FileInactive
 
+			// Notice: adding memGuardPages to avoid kswapd ping-pong
+			low += memGuardPages
 			// step2, add a compensation mechanism to prevent system thrashing due to insufficient file memory
 			fileReserved := general.Max(memLowReservePages, int(low))
 			if fileInactive < uint64(fileReserved) {
@@ -217,7 +220,9 @@ func (n *NumaMemoryPressurePlugin) detectNumaWatermarkPressure(numaID, free, min
 			n.numaFreeBelowWatermarkTimesMap[numaID]++
 		}
 	} else {
-		n.numaFreeBelowWatermarkTimesMap[numaID] = 0
+		if n.numaFreeBelowWatermarkTimesMap[numaID] > 0 {
+			n.numaFreeBelowWatermarkTimesMap[numaID]--
+		}
 	}
 	if n.numaFreeBelowWatermarkTimesMap[numaID] >= dynamicConfig.NumaFreeBelowWatermarkTimesThreshold {
 		n.numaActionMap[numaID] = actionEviction
