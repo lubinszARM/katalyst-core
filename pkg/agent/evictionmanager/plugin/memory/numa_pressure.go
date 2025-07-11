@@ -224,8 +224,13 @@ func (n *NumaMemoryPressurePlugin) detectNumaWatermarkPressure(numaID, free, min
 		}
 
 		// avoid excessive pressure on LRU spinlock in kswapd
-		if n.numaFreeBelowWatermarkTimesMap[numaID] > minDuration && n.isUnderAdditionalPressure(free, min, low) {
+		if n.numaFreeBelowWatermarkTimesMap[numaID] >= minDuration && n.isUnderAdditionalPressure(free, min, low) {
 			n.numaFreeBelowWatermarkTimesMap[numaID]++
+			// speed up in reclaiming eviction peiod
+			/*if n.numaFreeBelowWatermarkTimesMap[numaID] <= (dynamicConfig.NumaFreeBelowWatermarkTimesThreshold / 2) {
+				n.numaFreeBelowWatermarkTimesMap[numaID]++
+			}
+			*/
 		}
 	} else {
 		// added cooling mechanism to avoid kswapd ping-pong
