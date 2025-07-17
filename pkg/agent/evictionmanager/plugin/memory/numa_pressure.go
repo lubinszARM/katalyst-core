@@ -50,7 +50,7 @@ const (
 	memGapSize         = 1 * 1024 * 1024 * 1024 // 1G
 	memGuardSize       = 256 * 1024 * 1024      // 256M
 
-	minDuration = 3
+	minDuration = 2
 )
 
 var hostZoneInfoFile = "/proc/zoneinfo"
@@ -152,10 +152,13 @@ func (n *NumaMemoryPressurePlugin) detectNumaPressures() error {
 		// Notice: the unit of free/min/low from zoneinfo is pages.
 		if numaID < len(zoneinfo) && zoneinfo[numaID].Node == int64(numaID) {
 			low := zoneinfo[numaID].Low
+			min := zoneinfo[numaID].Min
 			fileInactive := zoneinfo[numaID].FileInactive
 
-			// Notice: adding a buffer range for mem.low to avoid kswapd ping-pong
+			// Notice: adding a buffer range for mem.low/mem.min to avoid kswapd ping-pong
 			low += n.memGuardPages
+			min += n.memGapPages
+
 			// step2, add a compensation mechanism to prevent system thrashing due to insufficient file memory
 			fileReserved := general.Max(int(n.memLowReservePages), int(low))
 			if fileInactive < uint64(fileReserved) {
@@ -164,7 +167,7 @@ func (n *NumaMemoryPressurePlugin) detectNumaPressures() error {
 			}
 
 			// step3, compare mem.free, mem.low, mem.min
-			if err := n.detectNumaWatermarkPressure(numaID, int(zoneinfo[numaID].Free), int(zoneinfo[numaID].Min), int(low)); err != nil {
+			if err := n.detectNumaWatermarkPressure(numaID, int(zoneinfo[numaID].Free), int(min), int(low)); err != nil {
 				errList = append(errList, err)
 				continue
 			}
@@ -212,7 +215,15 @@ func (n *NumaMemoryPressurePlugin) detectNumaWatermarkPressure(numaID, free, min
 			metricsTagKeyMetricName: metricsTagValueNumaFreeBelowWatermarkTimes,
 		})...)
 
-	if free < low {
+	if free < min {
+		// We are under a critical situation, NEED A EVICTION NOW!
+		n.isUnderNumaPressure = true
+		n.numaActionMap[numaID] = actionReclaimedEviction
+		if n.numaFreeBelowWatermarkTimesMap[numaID] < (dynamicConfig.NumaFreeBelowWatermarkTimesThreshold / 2) {
+			n.numaFreeBelowWatermarkTimesMap[numaID] = (dynamicConfig.NumaFreeBelowWatermarkTimesThreshold / 2)
+		}
+		n.numaFreeBelowWatermarkTimesMap[numaID]++
+	} else if free < low {
 		n.numaFreeBelowWatermarkTimesMap[numaID]++
 		// Currently, the default value for NumaFreeBelowWatermarkTimesThreshold is 20,
 		// with a default periodic check interval of 5 seconds.
