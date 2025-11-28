@@ -214,6 +214,7 @@ func (n *NumaMemoryPressurePlugin) detectNumaWatermarkPressure(numaID, free, min
 	// Notice:
 	// numaFreeBelowWatermarkTimes > NumaFreeBelowWatermarkTimesThreshold/2, trigger actionReclaimedEviction
 	// numaFreeBelowWatermarkTimes > NumaFreeBelowWatermarkTimesThreshold, trigger actionEviction
+	actionOnlineThreshold := dynamicConfig.NumaFreeBelowWatermarkTimesThreshold
 	actionReclaimedThreshold := (dynamicConfig.NumaFreeBelowWatermarkTimesThreshold / 2)
 	if actionReclaimedThreshold <= 0 {
 		actionReclaimedThreshold = dynamicConfig.NumaFreeBelowWatermarkTimesThreshold
@@ -223,10 +224,9 @@ func (n *NumaMemoryPressurePlugin) detectNumaWatermarkPressure(numaID, free, min
 		// We are under a DANGEROUS situation, NEED A EVICTION NOW! IMMEDIATELY!
 		n.isUnderNumaPressure = true
 		n.numaActionMap[numaID] = actionReclaimedEviction
-		if n.numaFreeBelowWatermarkTimesMap[numaID] < actionReclaimedThreshold {
-			n.numaFreeBelowWatermarkTimesMap[numaID] = actionReclaimedThreshold
+		if n.numaFreeBelowWatermarkTimesMap[numaID] < actionOnlineThreshold {
+			n.numaFreeBelowWatermarkTimesMap[numaID] = actionOnlineThreshold - 1
 		}
-		n.numaFreeBelowWatermarkTimesMap[numaID]++
 	} else if free < low {
 		n.numaFreeBelowWatermarkTimesMap[numaID]++
 
