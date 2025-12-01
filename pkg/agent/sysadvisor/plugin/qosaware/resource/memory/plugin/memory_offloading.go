@@ -77,6 +77,7 @@ type TmoStats struct {
 	qosLevel             string
 	memUsage             float64
 	memInactive          float64
+	memInactiveFile      uint64
 	memPsiAvg60          float64
 	pgscan               float64
 	pgsteal              float64
@@ -297,6 +298,7 @@ func (tmoEngine *tmoEngineInstance) getStats() (TmoStats, error) {
 		}
 		tmoStats.memUsage = memUsage.Value
 		tmoStats.memInactive = memInactiveFile.Value + memInactiveAnon.Value
+		tmoStats.memInactiveFile = uint64(memInactiveFile.Value)
 		tmoStats.memPsiAvg60 = psiAvg60.Value
 		tmoStats.pgsteal = pgsteal.Value
 		tmoStats.pgscan = pgscan.Value
@@ -390,6 +392,7 @@ func (tmoEngine *tmoEngineInstance) GetCgpath() string {
 func (tmoEngine *tmoEngineInstance) LoadConf(detail *tmo.TMOConfigDetail) {
 	tmoEngine.conf.EnableTMO = detail.EnableTMO
 	tmoEngine.conf.EnableSwap = detail.EnableSwap
+	tmoEngine.conf.ReservedInactiveFile = detail.ReservedInactiveFile
 	tmoEngine.conf.Interval = detail.Interval
 	tmoEngine.conf.PolicyName = detail.PolicyName
 	if psiPolicyConfDynamic := detail.PSIPolicyConf; psiPolicyConfDynamic != nil {
@@ -420,18 +423,29 @@ func (tmoEngine *tmoEngineInstance) CalculateOffloadingTargetSize() {
 		return
 	}
 
+	if !tmoEngine.conf.EnableSwap && tmoEngine.conf.ReservedInactiveFile > 0 {
+		inactiveFile := uint64(currStats.memInactiveFile)
+		if inactiveFile < tmoEngine.conf.ReservedInactiveFile {
+			general.Infof("Tmo obj: inactiveFile is lower than reservedInactiveFile in no-swap mode")
+			tmoEngine.offloadingTargetSize = 0
+			return
+		}
+
+	}
+
+	// If swap is not enabled and the cache size is close to the mapped file size,
+	// skip the reclaim process. This is a protective measure to avoid reclaiming
+	// potentially useful page cache when swap is disabled, as reclaiming might
+	// lead to performance degradation if the pages are needed again soon.
+	if !tmoEngine.conf.EnableSwap && currStats.cache < CacheMappedCoeff*currStats.mapped {
+		general.Infof("Tmo obj: %s cache is close to mapped, skip reclaim", currStats.obj)
+		tmoEngine.offloadingTargetSize = 0
+		return
+	}
+
 	// TODO: get result from qrm to make sure last offloading action finished
 	if fn, ok := tmoPolicyFuncs.Load(tmoEngine.conf.PolicyName); ok {
 		if policyFunc, ok := fn.(TmoPolicyFn); ok {
-			// If swap is not enabled and the cache size is close to the mapped file size,
-			// skip the reclaim process. This is a protective measure to avoid reclaiming
-			// potentially useful page cache when swap is disabled, as reclaiming might
-			// lead to performance degradation if the pages are needed again soon.
-			if !tmoEngine.conf.EnableSwap && currStats.cache < CacheMappedCoeff*currStats.mapped {
-				general.Infof("Tmo obj: %s cache is close to mapped, skip reclaim", currStats.obj)
-				tmoEngine.offloadingTargetSize = 0
-				return
-			}
 			err, targetFromPolicy := policyFunc(tmoEngine.lastStats, currStats, tmoEngine.conf, tmoEngine.emitter)
 			if err != nil {
 				general.ErrorS(err, "Failed to calculate offloading memory size")
@@ -450,6 +464,14 @@ func (tmoEngine *tmoEngineInstance) CalculateOffloadingTargetSize() {
 			// and does not exceed the policy's recommendation.
 			targetSize := math.Max(0, math.Min(math.Max(CacheExceptMappedCoeff*cacheExceptMapped, minSizeCacheExceptMap), targetFromPolicy))
 
+			if !tmoEngine.conf.EnableSwap && tmoEngine.conf.ReservedInactiveFile > 0 {
+				inactiveFile := uint64(currStats.memInactiveFile)
+				maxRecalimable := float64(inactiveFile - tmoEngine.conf.ReservedInactiveFile)
+
+				if targetSize > maxRecalimable {
+					targetSize = maxRecalimable
+				}
+			}
 			general.InfoS("Handle targetSize from policy", "Tmo obj:", currStats.obj, "targetFromPolicy:", targetFromPolicy,
 				"cacheExceptMapped", cacheExceptMapped, "targetSize", targetSize)
 
