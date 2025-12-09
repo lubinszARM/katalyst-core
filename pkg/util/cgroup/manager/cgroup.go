@@ -27,6 +27,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/util"
 	"github.com/kubewharf/katalyst-core/pkg/consts"
 	"github.com/kubewharf/katalyst-core/pkg/metrics"
 	"github.com/kubewharf/katalyst-core/pkg/util/asyncworker"
@@ -522,7 +523,6 @@ func DisableSwapMaxWithAbsolutePathRecursive(absCgroupPath string) error {
 
 func MemoryOffloadingWithAbsolutePath(ctx context.Context, absCgroupPath string, nbytes int64, mems machine.CPUSet) error {
 	startTime := time.Now()
-
 	var (
 		cmd string
 		err error
@@ -566,8 +566,17 @@ func MemoryOffloadingWithAbsolutePath(ctx context.Context, absCgroupPath string,
 		"absCGPath": absCgroupPath,
 		"succeeded": fmt.Sprintf("%v", err == nil),
 	})...)
-	delta := time.Since(startTime).Seconds()
-	general.Infof("[MemoryOffloadingWithAbsolutePath] BBLU it takes %v to do \"%v\" on cgroup: %s", delta, nbytes, absCgroupPath)
+
+	deltaMs := time.Since(startTime).Milliseconds()
+	_ = asyncworker.EmitCustomizedAsyncedMetrics(ctx,
+		util.MetricNameMemoryHandlerAdvisorMemoryOffloadTime,
+		deltaMs,
+		metrics.ConvertMapToTags(map[string]string{
+			"entryName":    absCgroupPath,
+			"subEntryName": "",
+		})...,
+	)
+	general.Infof("[MemoryOffloadingWithAbsolutePath] memory reclaim finished, cost=%dms, bytes=%d, cgroup=%s", deltaMs, nbytes, absCgroupPath)
 
 	return err
 }
