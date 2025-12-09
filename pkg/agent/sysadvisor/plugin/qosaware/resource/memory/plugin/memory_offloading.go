@@ -18,6 +18,7 @@ package plugin
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"path/filepath"
 	"strconv"
@@ -450,6 +451,7 @@ func (tmoEngine *tmoEngineInstance) CalculateOffloadingTargetSize() {
 			// and does not exceed the policy's recommendation.
 			targetSize := math.Max(0, math.Min(math.Max(CacheExceptMappedCoeff*cacheExceptMapped, minSizeCacheExceptMap), targetFromPolicy))
 
+			fmt.Printf("BBLU reclaim:%v...\n", targetSize)
 			general.InfoS("Handle targetSize from policy", "Tmo obj:", currStats.obj, "targetFromPolicy:", targetFromPolicy,
 				"cacheExceptMapped", cacheExceptMapped, "targetSize", targetSize)
 
