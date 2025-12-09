@@ -474,7 +474,7 @@ func (tmoEngine *tmoEngineInstance) CalculateOffloadingTargetSize() {
 					targetSize = maxRecalimable
 				}
 			}
-			general.InfoS("Handle targetSize from policy", "Tmo obj:", currStats.obj, "targetFromPolicy:", targetFromPolicy,
+			general.InfoS("BBLU Handle targetSize from policy", "Tmo obj:", currStats.obj, "targetFromPolicy:", targetFromPolicy,
 				"cacheExceptMapped", cacheExceptMapped, "targetSize", targetSize)
 
 			tmoEngine.offloadingTargetSize = targetSize
