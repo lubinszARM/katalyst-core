@@ -148,6 +148,23 @@ func TestSetMemCompact(t *testing.T) {
 	}, metrics.DummyMetrics{}, &dynamicconfig.DynamicAgentConfiguration{}, metrics.DummyMetrics{}, metaServer)
 }
 
+func TestSetMemTHP(t *testing.T) {
+	t.Parallel()
+	SetMemTHP(&coreconfig.Configuration{
+		AgentConfiguration: &agent.AgentConfiguration{
+			StaticAgentConfiguration: &configagent.StaticAgentConfiguration{
+				QRMPluginsConfiguration: &qrm.QRMPluginsConfiguration{
+					MemoryQRMPluginConfig: &qrm.MemoryQRMPluginConfig{
+						FragMemOptions: qrm.FragMemOptions{
+							EnableSettingFragMem: false,
+						},
+					},
+				},
+			},
+		},
+	}, nil, &dynamicconfig.DynamicAgentConfiguration{}, nil, nil)
+}
+
 // Helper function to create a temporary file with given content
 func createTempFile(t *testing.T, content string) string {
 	file, err := ioutil.TempFile("", "testfile")
