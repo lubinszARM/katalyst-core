@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -35,6 +36,9 @@ import (
 const (
 	IrqRootPath    = "/proc/irq"
 	InterruptsFile = "/proc/interrupts"
+
+	// TransparentHugepageEnabledPath is a kernel sysfs interface to configure THP behavior.
+	TransparentHugepageEnabledPath = "/sys/kernel/mm/transparent_hugepage/enabled"
 )
 
 type manager struct {
@@ -199,6 +203,28 @@ func (m *manager) ApplyProcInterrupts(irqNumber int, cpuset string) error {
 	return nil
 }
 
+// ApplyTransparentHugepageEnabledAtPath writes THP mode to the given sysfs path.
+// The kernel interface expects a simple string like "madvise", "always" or "never".
+func (m *manager) ApplyTransparentHugepageEnabledAtPath(path, mode string) error {
+	mode = strings.TrimSpace(mode)
+	if mode == "" {
+		return fmt.Errorf("empty THP mode")
+	}
+	if strings.TrimSpace(path) == "" {
+		return fmt.Errorf("empty THP enabled path")
+	}
+
+	dir := filepath.Dir(path)
+	file := filepath.Base(path)
+	if err, applied, oldData := common.InstrumentedWriteFileIfChange(dir, file, mode+"\n"); err != nil {
+		return err
+	} else if applied {
+		general.Infof("[Procfs] apply THP enabled successfully, path: %s, data: %v, old data: %v\n", path, mode, oldData)
+	}
+
+	return nil
+}
+
 // ReadFileNoStat uses io.ReadAll to read contents of entire file.
 // This is similar to os.ReadFile but without the call to os.Stat, because
 // many files in /proc and /sys report incorrect file sizes (either 0 or 4096).
@@ -215,6 +241,21 @@ func ReadFileNoStat(filename string) ([]byte, error) {
 
 	reader := io.LimitReader(f, maxBufferSize)
 	return io.ReadAll(reader)
+}
+
+// WriteFileIfChange writes data to path only when it differs from current content.
+// It trims spaces on both old/new to avoid unnecessary writes for procfs/sysfs files.
+func WriteFileIfChange(path string, data []byte, perm os.FileMode) error {
+	oldData, err := ReadFileNoStat(path)
+	if err != nil {
+		return err
+	}
+
+	if bytes.Equal(bytes.TrimSpace(oldData), bytes.TrimSpace(data)) {
+		return nil
+	}
+
+	return os.WriteFile(path, data, perm)
 }
 
 func parseInterrupts(r io.Reader) (procfs.Interrupts, error) {

@@ -161,3 +161,9 @@ func GetTaskSchedWait(pids []int) (map[int]uint64, error) {
 func ApplyProcInterrupts(irqNumber int, cpuset string) error {
 	return GetProcFSManager().ApplyProcInterrupts(irqNumber, cpuset)
 }
+
+// ApplyTransparentHugepageEnabledAtPath writes the given THP mode into the given path.
+// Typical path is TransparentHugepageEnabledPath.
+func ApplyTransparentHugepageEnabledAtPath(path, mode string) error {
+	return GetProcFSManager().ApplyTransparentHugepageEnabledAtPath(path, mode)
+}
