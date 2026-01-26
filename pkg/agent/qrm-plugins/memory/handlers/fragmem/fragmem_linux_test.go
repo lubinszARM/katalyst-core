@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 
+	memconsts "github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/memory/consts"
 	coreconfig "github.com/kubewharf/katalyst-core/pkg/config"
 	"github.com/kubewharf/katalyst-core/pkg/config/agent"
 	configagent "github.com/kubewharf/katalyst-core/pkg/config/agent"
@@ -36,7 +37,9 @@ import (
 	metaagent "github.com/kubewharf/katalyst-core/pkg/metaserver/agent"
 	"github.com/kubewharf/katalyst-core/pkg/metaserver/agent/metric"
 	"github.com/kubewharf/katalyst-core/pkg/metaserver/agent/pod"
+	malachitetypes "github.com/kubewharf/katalyst-core/pkg/metaserver/agent/metric/provisioner/malachite/types"
 	"github.com/kubewharf/katalyst-core/pkg/metrics"
+	"github.com/kubewharf/katalyst-core/pkg/util/general"
 	"github.com/kubewharf/katalyst-core/pkg/util/machine"
 )
 
@@ -146,6 +149,154 @@ func TestSetMemCompact(t *testing.T) {
 			},
 		},
 	}, metrics.DummyMetrics{}, &dynamicconfig.DynamicAgentConfiguration{}, metrics.DummyMetrics{}, metaServer)
+}
+
+func TestSetMemTHP(t *testing.T) {
+	// This test mutates package-level vars (thpEnabledPath), so don't run in parallel.
+	general.RegisterReportCheck(memconsts.SetMemTHP, 0, general.HealthzCheckStateNotReady)
+
+	SetMemTHP(&coreconfig.Configuration{
+		AgentConfiguration: &agent.AgentConfiguration{
+			StaticAgentConfiguration: &configagent.StaticAgentConfiguration{
+				QRMPluginsConfiguration: &qrm.QRMPluginsConfiguration{
+					MemoryQRMPluginConfig: &qrm.MemoryQRMPluginConfig{
+						FragMemOptions: qrm.FragMemOptions{
+							EnableSettingFragMem: false,
+						},
+					},
+				},
+			},
+		},
+	}, nil, &dynamicconfig.DynamicAgentConfiguration{}, nil, nil)
+
+	// THPDefaultConfig empty: skip THP tuning entirely.
+	SetMemTHP(&coreconfig.Configuration{
+		AgentConfiguration: &agent.AgentConfiguration{
+			StaticAgentConfiguration: &configagent.StaticAgentConfiguration{
+				QRMPluginsConfiguration: &qrm.QRMPluginsConfiguration{
+					MemoryQRMPluginConfig: &qrm.MemoryQRMPluginConfig{
+						FragMemOptions: qrm.FragMemOptions{
+							EnableSettingFragMem: true,
+							THPDefaultConfig:     "",
+						},
+					},
+				},
+			},
+		},
+	}, nil, &dynamicconfig.DynamicAgentConfiguration{}, nil, nil)
+
+	// THPDefaultConfig=never: fast-path to disable THP directly.
+	oldPath := thpEnabledPath
+	f := createTempFile(t, "always [madvise] never\n")
+	defer os.Remove(f)
+	defer func() { thpEnabledPath = oldPath }()
+	thpEnabledPath = f
+
+	SetMemTHP(&coreconfig.Configuration{
+		AgentConfiguration: &agent.AgentConfiguration{
+			StaticAgentConfiguration: &configagent.StaticAgentConfiguration{
+				QRMPluginsConfiguration: &qrm.QRMPluginsConfiguration{
+					MemoryQRMPluginConfig: &qrm.MemoryQRMPluginConfig{
+						FragMemOptions: qrm.FragMemOptions{
+							EnableSettingFragMem: true,
+							THPDefaultConfig:     "never",
+						},
+					},
+				},
+			},
+		},
+	}, nil, &dynamicconfig.DynamicAgentConfiguration{}, nil, nil)
+
+	b, rerr := os.ReadFile(f)
+	assert.NoError(t, rerr)
+	assert.Equal(t, "never\n", string(b))
+
+	res := general.GetRegisterReadinessCheckResult()
+	check, ok := res[general.HealthzCheckName(memconsts.SetMemTHP)]
+	assert.True(t, ok)
+	assert.True(t, check.Ready)
+}
+
+func TestCalcHighOrderScore(t *testing.T) {
+	t.Parallel()
+
+	score, missing, ok := calcHighOrderScore(
+		[]malachitetypes.MemOrderScore{{Order: 10, Score: 100}, {Order: 9, Score: 80}},
+	)
+	assert.True(t, ok)
+	assert.Nil(t, missing)
+	assert.InDelta(t, 90.0, score, 1e-6)
+
+	_, missing, ok = calcHighOrderScore([]malachitetypes.MemOrderScore{{Order: 9, Score: 100}})
+	assert.False(t, ok)
+	assert.Equal(t, []int{10}, missing)
+
+	_, _, ok = calcHighOrderScore(nil)
+	assert.False(t, ok)
+}
+
+func TestDisableTHPAtPath(t *testing.T) {
+	t.Parallel()
+
+	// already disabled
+	f1 := createTempFile(t, "always madvise [never]\n")
+	defer os.Remove(f1)
+	err := setTHPModeAtPath(f1, "never")
+	assert.NoError(t, err)
+	b, rerr := os.ReadFile(f1)
+	assert.NoError(t, rerr)
+	assert.Equal(t, "always madvise [never]\n", string(b))
+
+	// should disable
+	f2 := createTempFile(t, "always [madvise] never\n")
+	defer os.Remove(f2)
+	err = setTHPModeAtPath(f2, "never")
+	assert.NoError(t, err)
+	b, rerr = os.ReadFile(f2)
+	assert.NoError(t, rerr)
+	assert.Equal(t, "never\n", string(b))
+}
+
+func TestEnableTHPMadviseAtPath(t *testing.T) {
+	t.Parallel()
+
+	// already madvise
+	f1 := createTempFile(t, "always [madvise] never\n")
+	defer os.Remove(f1)
+	err := setTHPModeAtPath(f1, "madvise")
+	assert.NoError(t, err)
+	b, rerr := os.ReadFile(f1)
+	assert.NoError(t, rerr)
+	assert.Equal(t, "always [madvise] never\n", string(b))
+
+	// should set madvise
+	f2 := createTempFile(t, "always madvise [never]\n")
+	defer os.Remove(f2)
+	err = setTHPModeAtPath(f2, "madvise")
+	assert.NoError(t, err)
+	b, rerr = os.ReadFile(f2)
+	assert.NoError(t, rerr)
+	assert.Equal(t, "madvise\n", string(b))
+}
+
+func TestSetTHPModeAtPathInvalid(t *testing.T) {
+	t.Parallel()
+
+	f := createTempFile(t, "always [madvise] never\n")
+	defer os.Remove(f)
+	err := setTHPModeAtPath(f, "invalid")
+	assert.Error(t, err)
+}
+
+func TestDecideTHPDecision(t *testing.T) {
+	t.Parallel()
+
+	threshold := 100.0
+	assert.Equal(t, thpDecisionDisable, decideTHPDecision(100.1, threshold))
+	assert.Equal(t, thpDecisionNone, decideTHPDecision(100.0, threshold))
+	assert.Equal(t, thpDecisionNone, decideTHPDecision(95.0, threshold))
+	assert.Equal(t, thpDecisionEnable, decideTHPDecision(89.9, threshold)) // < 100*0.9
+	assert.Equal(t, thpDecisionNone, decideTHPDecision(90.0, threshold))   // == 100*0.9
 }
 
 // Helper function to create a temporary file with given content
