@@ -542,12 +542,17 @@ func (tmo *transparentMemoryOffloading) Reconcile(status *types.MemoryPressureSt
 				}
 			}
 
-			// disable TMO if the Pod is numa exclusive and is not reclaimable
+			// disable TMO for pods that are not reclaimable.
+			// Note: dedicated numa-exclusive pods are allowed to do reclaim/offload.
 			enableReclaim, _ := helper.PodEnableReclaim(context.Background(), tmo.metaServer, containerInfo.PodUID, true)
 			if !enableReclaim {
-				tmo.containerTmoEngines[podContainerName].GetConf().EnableTMO = false
-				tmo.containerTmoEngines[podContainerName].GetConf().EnableSwap = false
-				general.Infof("container with podContainerName: %s is required to disable TMO since it is not reclaimable", podContainerName)
+				if containerInfo.IsDedicatedNumaExclusive() {
+					general.Infof("BBLU: %s , keep TMO enabled", podContainerName)
+				} else {
+					tmo.containerTmoEngines[podContainerName].GetConf().EnableTMO = false
+					tmo.containerTmoEngines[podContainerName].GetConf().EnableSwap = false
+					general.Infof("BBLU container with podContainerName: %s is required to disable TMO since it is not reclaimable", podContainerName)
+				}
 			}
 
 			// disable TMO if the container is in TMO block list
