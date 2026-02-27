@@ -35,6 +35,7 @@ import (
 	metaagent "github.com/kubewharf/katalyst-core/pkg/metaserver/agent"
 	metametric "github.com/kubewharf/katalyst-core/pkg/metaserver/agent/metric"
 	"github.com/kubewharf/katalyst-core/pkg/metrics"
+	"github.com/kubewharf/katalyst-core/pkg/util/general"
 	"github.com/kubewharf/katalyst-core/pkg/util/machine"
 	utilmetric "github.com/kubewharf/katalyst-core/pkg/util/metric"
 )
@@ -152,7 +153,7 @@ func TestSetHostWatermark_SetScaleFactor_WritesFile(t *testing.T) {
 	conf := makeTestCoreConf(200, 0)
 	SetHostWatermark(conf, nil, nil, metrics.DummyMetrics{}, nil)
 
-	val, err := getIntFromFile(targetFile)
+	val, err := general.ReadInt64FromFile(targetFile)
 	require.NoError(t, err)
 	require.Equal(t, int64(200), val)
 }
@@ -175,7 +176,7 @@ func TestSetHostWatermark_SetScaleFactor_NoClamp(t *testing.T) {
 	conf := makeTestCoreConf(1, 0)
 	SetHostWatermark(conf, nil, nil, metrics.DummyMetrics{}, nil)
 
-	val, err := getIntFromFile(targetFile)
+	val, err := general.ReadInt64FromFile(targetFile)
 	require.NoError(t, err)
 	require.Equal(t, int64(1), val)
 }
@@ -200,7 +201,7 @@ func TestSetHostWatermark_AutoCalc_ClampMin(t *testing.T) {
 	conf := makeTestCoreConf(0, 1)
 	SetHostWatermark(conf, nil, nil, metrics.DummyMetrics{}, server)
 
-	val, err := getIntFromFile(targetFile)
+	val, err := general.ReadInt64FromFile(targetFile)
 	require.NoError(t, err)
 	require.Equal(t, int64(10), val)
 }
@@ -225,7 +226,7 @@ func TestSetHostWatermark_AutoCalc_ClampMax(t *testing.T) {
 	conf := makeTestCoreConf(0, 10)
 	SetHostWatermark(conf, nil, nil, metrics.DummyMetrics{}, server)
 
-	val, err := getIntFromFile(targetFile)
+	val, err := general.ReadInt64FromFile(targetFile)
 	require.NoError(t, err)
 	require.Equal(t, int64(500), val)
 }

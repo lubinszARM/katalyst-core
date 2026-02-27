@@ -241,21 +241,6 @@ func ReadFileNoStat(filename string) ([]byte, error) {
 	return io.ReadAll(reader)
 }
 
-// WriteFileIfChange writes data to path only when it differs from current content.
-// It trims spaces on both old/new to avoid unnecessary writes for procfs/sysctl-style files.
-func WriteFileIfChange(path string, data []byte, perm os.FileMode) error {
-	oldData, err := ReadFileNoStat(path)
-	if err != nil {
-		return err
-	}
-
-	if bytes.Equal(bytes.TrimSpace(oldData), bytes.TrimSpace(data)) {
-		return nil
-	}
-
-	return os.WriteFile(path, data, perm)
-}
-
 func parseInterrupts(r io.Reader) (procfs.Interrupts, error) {
 	var (
 		interrupts = procfs.Interrupts{}

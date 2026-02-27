@@ -82,14 +82,20 @@ func SetHostWatermark(conf *coreconfig.Configuration,
 	if conf.SetVMWatermarkScaleFactor == 0 {
 		target = clampWatermarkScaleFactor(target)
 	}
-	oldVal, newVal, changed, err := setIntIfDifferent(watermarkScaleFactorPath, target)
-	if err != nil {
+
+	// Use procfs manager to apply with audit + idempotency.
+	// Note: successful write will be logged by the underlying write-if-change helper.
+	if err := procfsm.ApplyVMWatermarkScaleFactorAtPath(watermarkScaleFactorPath, target); err != nil {
 		errList = append(errList, err)
 		general.Errorf("set watermark_scale_factor failed: %v", err)
 		return
 	}
-	if changed {
-		general.Infof("updated vm.watermark_scale_factor: old=%d new=%d", oldVal, newVal)
+
+	newVal, err := general.ReadInt64FromFile(watermarkScaleFactorPath)
+	if err != nil {
+		errList = append(errList, err)
+		general.Errorf("read watermark_scale_factor after apply failed: %v", err)
+		return
 	}
 	_ = emitter.StoreInt64(metricNameVMWatermarkScaleFactor, newVal, metrics.MetricTypeNameRaw)
 }
