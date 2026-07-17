@@ -20,6 +20,7 @@ limitations under the License.
 package fragmem
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -218,7 +219,7 @@ func setTHPMode(enabledMode, shmemMode string) error {
 
 func setTHPModeAtPathIfExists(path, mode string) error {
 	err := setTHPModeAtPath(path, mode)
-	if err != nil && os.IsNotExist(err) {
+	if err != nil && errors.Is(err, os.ErrNotExist) {
 		general.Infof("THP path %s not found, skip applying mode %q", path, mode)
 		return nil
 	}
