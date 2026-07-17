@@ -21,6 +21,7 @@ package fragmem
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	k8serrors "k8s.io/apimachinery/pkg/util/errors"
@@ -37,6 +38,8 @@ import (
 )
 
 const (
+	thpModeAdvise  = "advise"
+	thpModeDeny    = "deny"
 	thpModeMadvise = "madvise"
 	thpModeAlways  = "always"
 	thpModeNever   = "never"
@@ -50,6 +53,10 @@ const (
 // thpEnabledPath is the sysfs path we write to when tuning THP.
 // It is a var (not const) so tests can override it with a temp file.
 var thpEnabledPath = procfsm.TransparentHugepageEnabledPath
+
+// thpShmemEnabledPath is the sysfs path for tmpfs/shmem THP mode.
+// It is a var (not const) so tests can override it with a temp file.
+var thpShmemEnabledPath = procfsm.TransparentHugepageShmemEnabledPath
 
 type thpDecision int
 
@@ -89,7 +96,7 @@ func SetMemTHP(conf *coreconfig.Configuration,
 	// If THPDefaultConfig is "never", fast-path to disable THP directly.
 	if mode == thpModeNever {
 		general.Infof("SetMemTHP: THPDefaultConfig=never, disable THP directly")
-		if err := setTHPModeAtPath(thpEnabledPath, thpModeNever); err != nil {
+		if err := setTHPMode(thpModeNever, thpModeDeny); err != nil {
 			errList = append(errList, err)
 		}
 		return
@@ -146,7 +153,7 @@ func doMemTHP(conf *coreconfig.Configuration, metaServer *metaserver.MetaServer,
 	switch decision {
 	case thpDecisionDisable:
 		general.Infof("THP disable triggered: maxHighOrderScore=%.1f numa=%d threshold=%.1f", maxScore, maxNumaID, threshold)
-		return setTHPModeAtPath(thpEnabledPath, thpModeNever)
+		return setTHPMode(thpModeNever, thpModeDeny)
 	case thpDecisionEnable:
 		// Be conservative: only try to recover when we have valid scores for all NUMA nodes.
 		// If metrics are missing on any NUMA node, keep current THP mode unchanged.
@@ -155,8 +162,8 @@ func doMemTHP(conf *coreconfig.Configuration, metaServer *metaserver.MetaServer,
 			if mode == "" {
 				mode = thpModeMadvise
 			}
-			general.Infof("THP enable triggered: maxHighOrderScore=%.1f enableThreshold=%.1f threshold=%.1f recoverTo=%s", maxScore, enableThreshold, threshold, mode)
-			return setTHPModeAtPath(thpEnabledPath, mode)
+			general.Infof("THP enable triggered: maxHighOrderScore=%.1f enableThreshold=%.1f threshold=%.1f recoverTo=%s shmemRecoverTo=%s", maxScore, enableThreshold, threshold, mode, thpModeAdvise)
+			return setTHPMode(mode, thpModeAdvise)
 		}
 		general.Infof("THP enable skipped due to missing metrics: maxHighOrderScore=%.1f enableThreshold=%.1f threshold=%.1f missingScore=%d", maxScore, enableThreshold, threshold, missingScore)
 		return nil
@@ -196,12 +203,34 @@ func decideTHPDecision(maxScore, threshold float64) thpDecision {
 	return thpDecisionNone
 }
 
+func setTHPMode(enabledMode, shmemMode string) error {
+	var errList []error
+
+	if err := setTHPModeAtPath(thpEnabledPath, enabledMode); err != nil {
+		errList = append(errList, err)
+	}
+	if err := setTHPModeAtPathIfExists(thpShmemEnabledPath, shmemMode); err != nil {
+		errList = append(errList, err)
+	}
+
+	return k8serrors.NewAggregate(errList)
+}
+
+func setTHPModeAtPathIfExists(path, mode string) error {
+	err := setTHPModeAtPath(path, mode)
+	if err != nil && os.IsNotExist(err) {
+		general.Infof("THP path %s not found, skip applying mode %q", path, mode)
+		return nil
+	}
+	return err
+}
+
 func setTHPModeAtPath(path, mode string) error {
 	normalizedMode := normalizeTHPMode(mode)
 	switch normalizedMode {
-	case thpModeMadvise, thpModeAlways, thpModeNever:
+	case thpModeAdvise, thpModeDeny, thpModeMadvise, thpModeAlways, thpModeNever:
 	default:
-		return fmt.Errorf("invalid THP mode %q, expected one of %q/%q/%q", normalizedMode, thpModeMadvise, thpModeAlways, thpModeNever)
+		return fmt.Errorf("invalid THP mode %q, expected one of %q/%q/%q/%q/%q", normalizedMode, thpModeAdvise, thpModeDeny, thpModeMadvise, thpModeAlways, thpModeNever)
 	}
 
 	content, err := procfsm.ReadFileNoStat(path)
