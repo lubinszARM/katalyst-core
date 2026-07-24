@@ -58,8 +58,8 @@ const (
 const (
 	InactiveProbe            = 0.1
 	OffloadingSizeScaleCoeff = 1.05
-	CacheMappedCoeff         = 2
-	CacheExceptMappedCoeff   = 2
+	CacheMappedCoeff         = 0.1 //2
+	CacheExceptMappedCoeff   = 1   //2
 
 	minSizeCacheExceptMap = 1 * 1024 * 1024
 )
@@ -128,8 +128,11 @@ func refaultPolicyFunc(lastStats TmoStats, currStats TmoStats, conf *tmoconf.TMO
 	}
 
 	var result float64
-	if reclaimAccuracyRatio < conf.RefaultPolicyConf.ReclaimAccuracyTarget || reclaimScanEfficiencyRatio < conf.RefaultPolicyConf.ReclaimScanEfficiencyTarget {
-		// Decrease offloading size if detecting the reclaim accuracy or scan efficiency is below the targets
+	if reclaimAccuracyRatio < conf.RefaultPolicyConf.ReclaimAccuracyTarget {
+		// Stop offloading once reclaim accuracy is below the target.
+		result = 0
+	} else if reclaimScanEfficiencyRatio < conf.RefaultPolicyConf.ReclaimScanEfficiencyTarget {
+		// Decrease offloading size if reclaim scan efficiency is below the target.
 		result = math.Max(0, lastStats.offloadingTargetSize*reclaimAccuracyRatio)
 	} else {
 		// Try to increase offloading size but make sure not exceed the max probe of memory usage and 10% of inactive memory when the target size of last round is relatively small,
@@ -450,8 +453,8 @@ func (tmoEngine *tmoEngineInstance) CalculateOffloadingTargetSize() {
 
 			// Calculate the cache size excluding the mapped size,
 			// which is a primary candidate for offloading.
-			cacheExceptMapped := currStats.cache - currStats.mapped
-
+			//cacheExceptMapped := currStats.cache - currStats.mapped
+			cacheExceptMapped := math.Max(0, float64(currStats.memInactiveFile)-float64(tmoEngine.conf.ReservedInactiveFile))
 			// Determine the final target offloading size.
 			// It's calculated as the maximum of two values:
 			// 1. A fraction of the cache size excluding mapped files (cacheExceptMapped), with a minimum floor (minSizeCacheExceptMap).
@@ -463,12 +466,13 @@ func (tmoEngine *tmoEngineInstance) CalculateOffloadingTargetSize() {
 			// ReservedInactiveFile should be checked in file-reclaiming-only mode
 			if !tmoEngine.conf.EnableSwap && tmoEngine.conf.ReservedInactiveFile > 0 {
 				inactiveFile := currStats.memInactiveFile
-				maxReclaimable := float64(inactiveFile) - float64(tmoEngine.conf.ReservedInactiveFile) - CacheMappedCoeff*currStats.mapped
+				maxReclaimable := float64(inactiveFile) - float64(tmoEngine.conf.ReservedInactiveFile)
 
 				if targetSize > maxReclaimable {
 					targetSize = math.Max(0, maxReclaimable)
 				}
 			}
+
 			general.InfoS("Handle targetSize from policy", "Tmo obj:", currStats.obj, "targetFromPolicy:", targetFromPolicy,
 				"cacheExceptMapped", cacheExceptMapped, "targetSize", targetSize)
 
