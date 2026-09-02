@@ -70,6 +70,7 @@ func newManager(metaServer *metaserver.MetaServer) *managerImpl {
 }
 
 func (m *managerImpl) UpdateContainerCPUIdle(conf *config.Configuration) error {
+	general.Infof("BBLU test .....\n")
 	if conf == nil {
 		return fmt.Errorf("nil configuration")
 	}
