@@ -25,17 +25,25 @@ import (
 
 	"github.com/bytedance/mockey"
 	"github.com/stretchr/testify/assert"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	k8stypes "k8s.io/apimachinery/pkg/types"
 
 	v1alpha1 "github.com/kubewharf/katalyst-api/pkg/apis/config/v1alpha1"
 
 	"github.com/kubewharf/katalyst-core/pkg/agent/qrm-plugins/memory/dynamicpolicy/memoryadvisor"
+	"github.com/kubewharf/katalyst-core/pkg/config"
 	tmoconf "github.com/kubewharf/katalyst-core/pkg/config/agent/dynamic/tmo"
 	"github.com/kubewharf/katalyst-core/pkg/consts"
 	"github.com/kubewharf/katalyst-core/pkg/metaserver"
 	agentmetaserver "github.com/kubewharf/katalyst-core/pkg/metaserver/agent"
 	metric "github.com/kubewharf/katalyst-core/pkg/metaserver/agent/metric"
+	podfetcher "github.com/kubewharf/katalyst-core/pkg/metaserver/agent/pod"
+	"github.com/kubewharf/katalyst-core/pkg/metaserver/spd"
 	"github.com/kubewharf/katalyst-core/pkg/metrics"
 	utilmetric "github.com/kubewharf/katalyst-core/pkg/util/metric"
+	"github.com/kubewharf/katalyst-core/pkg/util/native"
 )
 
 var transparentMemoryOffloadingTestMutex sync.Mutex
@@ -329,4 +337,86 @@ func TestTmoEngineCalculateOffloadingTargetSize_DoNotSkipWhenSwapFreeEnough(t *t
 
 	engine.CalculateOffloadingTargetSize()
 	assert.Equal(t, 128.0, engine.GetOffloadingTargetSize())
+}
+
+func TestTransparentMemoryOffloadingReconcile_OnlyAllowPodsWithExplicitDifferentCPURequestAndLimit(t *testing.T) {
+	t.Parallel()
+	transparentMemoryOffloadingTestMutex.Lock()
+	defer transparentMemoryOffloadingTestMutex.Unlock()
+	defer mockey.UnPatchAll()
+
+	makePod := func(uid, name string, cpuRequest, cpuLimit *resource.Quantity) *v1.Pod {
+		requests := v1.ResourceList{}
+		limits := v1.ResourceList{}
+		if cpuRequest != nil {
+			requests[v1.ResourceCPU] = *cpuRequest
+		}
+		if cpuLimit != nil {
+			limits[v1.ResourceCPU] = *cpuLimit
+		}
+
+		return &v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				UID:       k8stypes.UID(uid),
+				Name:      name,
+				Namespace: "default",
+			},
+			Spec: v1.PodSpec{
+				Containers: []v1.Container{
+					{
+						Name: "main",
+						Resources: v1.ResourceRequirements{
+							Requests: requests,
+							Limits:   limits,
+						},
+					},
+				},
+			},
+			Status: v1.PodStatus{
+				Phase:             v1.PodRunning,
+				ContainerStatuses: []v1.ContainerStatus{{Name: "main"}},
+			},
+		}
+	}
+
+	request1 := resource.MustParse("1")
+	limit1 := resource.MustParse("1")
+	limit2 := resource.MustParse("2")
+
+	equalPod := makePod("pod-equal", "pod-equal", &request1, &limit1)
+	diffPod := makePod("pod-diff", "pod-diff", &request1, &limit2)
+	noLimitPod := makePod("pod-no-limit", "pod-no-limit", &request1, nil)
+	noRequestPod := makePod("pod-no-request", "pod-no-request", nil, &limit2)
+
+	conf := config.NewConfiguration()
+	conf.GetDynamicConfiguration().TransparentMemoryOffloadingConfiguration.DefaultConfigurations.DefaultEnableTMO = true
+	conf.GetDynamicConfiguration().TransparentMemoryOffloadingConfiguration.DefaultConfigurations.DefaultEnableSwap = false
+	conf.GetDynamicConfiguration().TransparentMemoryOffloadingConfiguration.DefaultConfigurations.DefaultTMOInterval = 0
+
+	mockey.Mock((*tmoEngineInstance).getStats).IncludeCurrentGoRoutine().Return(TmoStats{}, nil).Build()
+
+	metaServer := &metaserver.MetaServer{
+		MetaAgent: &agentmetaserver.MetaAgent{
+			PodFetcher: &podfetcher.PodFetcherStub{PodList: []*v1.Pod{equalPod, diffPod, noLimitPod, noRequestPod}},
+		},
+		ServiceProfilingManager: spd.NewDummyServiceProfilingManager(nil),
+	}
+
+	tmo := NewTransparentMemoryOffloading(conf, nil, nil, metaServer, metrics.DummyMetrics{}).(*transparentMemoryOffloading)
+	err := tmo.Reconcile(nil)
+	assert.NoError(t, err)
+
+	equalContainerName := native.GeneratePodContainerName(equalPod.Name, "main")
+	diffContainerName := native.GeneratePodContainerName(diffPod.Name, "main")
+	noLimitContainerName := native.GeneratePodContainerName(noLimitPod.Name, "main")
+	noRequestContainerName := native.GeneratePodContainerName(noRequestPod.Name, "main")
+
+	assert.False(t, tmo.containerTmoEngines[equalContainerName].GetConf().EnableTMO)
+	assert.False(t, tmo.containerTmoEngines[equalContainerName].GetConf().EnableSwap)
+	assert.True(t, tmo.containerTmoEngines[diffContainerName].GetConf().EnableTMO)
+	assert.False(t, tmo.containerTmoEngines[diffContainerName].GetConf().EnableSwap)
+	assert.False(t, tmo.containerTmoEngines[noLimitContainerName].GetConf().EnableTMO)
+	assert.False(t, tmo.containerTmoEngines[noLimitContainerName].GetConf().EnableSwap)
+	assert.False(t, tmo.containerTmoEngines[noRequestContainerName].GetConf().EnableTMO)
+	assert.False(t, tmo.containerTmoEngines[noRequestContainerName].GetConf().EnableSwap)
 }

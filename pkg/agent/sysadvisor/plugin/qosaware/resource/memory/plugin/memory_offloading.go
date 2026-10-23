@@ -28,7 +28,9 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	resourceutil "k8s.io/kubernetes/pkg/api/v1/resource"
 
 	"github.com/kubewharf/katalyst-api/pkg/apis/config/v1alpha1"
 	katalystapiconsts "github.com/kubewharf/katalyst-api/pkg/consts"
@@ -194,6 +196,21 @@ func TMOBlockFnFromDynamicConfig(ci *types.ContainerInfo, extraConf interface{},
 		}
 	}
 	return false
+}
+
+func podHasExplicitCPULimitAndRequestMismatch(pod *v1.Pod) bool {
+	if pod == nil {
+		return false
+	}
+
+	requests, limits := resourceutil.PodRequestsAndLimits(pod)
+	request, hasRequest := requests[v1.ResourceCPU]
+	limit, hasLimit := limits[v1.ResourceCPU]
+	if !hasRequest || !hasLimit {
+		return false
+	}
+
+	return request.MilliValue() != limit.MilliValue()
 }
 
 type transparentMemoryOffloading struct {
@@ -651,6 +668,12 @@ func (tmo *transparentMemoryOffloading) Reconcile(status *types.MemoryPressureSt
 					tmo.containerTmoEngines[podContainerName].GetConf().EnableSwap = false
 					general.Infof("container with podContainerName: %s is required to disable TMO by TMOBlockFn: %s", podContainerName, tmoBlockFnName)
 				}
+			}
+
+			if !podHasExplicitCPULimitAndRequestMismatch(pod) {
+				tmo.containerTmoEngines[podContainerName].GetConf().EnableTMO = false
+				tmo.containerTmoEngines[podContainerName].GetConf().EnableSwap = false
+				general.Infof("container with podContainerName: %s is required to disable TMO because pod cpu request/limit are not both explicitly set with different values", podContainerName)
 			}
 
 			general.Infof("Final TMO configs for podContainerName: %v, enableTMO: %v, enableSwap: %v, interval: %v, policy: %v", podContainerName,
