@@ -29,6 +29,7 @@ import (
 
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	v1qos "k8s.io/kubernetes/pkg/apis/core/v1/helper/qos"
 
 	"github.com/kubewharf/katalyst-api/pkg/apis/config/v1alpha1"
 	katalystapiconsts "github.com/kubewharf/katalyst-api/pkg/consts"
@@ -187,9 +188,24 @@ func RegisterTMOBlockFunc(blockFnName string, blockFn TMOBlockFn) {
 }
 
 func TMOBlockFnFromDynamicConfig(ci *types.ContainerInfo, extraConf interface{}, dynamicConf interface{}) bool {
-	if conf, ok := dynamicConf.(*tmoconf.TMOBlockConfig); ok {
-		if (conf.LabelsSelector != nil && conf.LabelsSelector.Matches(labels.Set(ci.Labels))) ||
-			(conf.AnnotationsSelector != nil && conf.AnnotationsSelector.Matches(labels.Set(ci.Annotations))) {
+	conf, ok := dynamicConf.(*tmoconf.TMOBlockConfig)
+	if !ok || conf == nil {
+		return false
+	}
+
+	if conf.LabelsSelector != nil && conf.LabelsSelector.Matches(labels.Set(ci.Labels)) {
+		return true
+	}
+	if conf.AnnotationsSelector != nil && conf.AnnotationsSelector.Matches(labels.Set(ci.Annotations)) {
+		return true
+	}
+	for _, nativeQoSClass := range conf.NativeQoSClasses {
+		if ci.NativeQoSClass == nativeQoSClass {
+			return true
+		}
+	}
+	for _, runtimeClassName := range conf.RuntimeClasses {
+		if ci.RuntimeClassName == runtimeClassName {
 			return true
 		}
 	}
@@ -523,14 +539,21 @@ func (tmo *transparentMemoryOffloading) Reconcile(status *types.MemoryPressureSt
 		poolName := commonstate.GetSpecifiedPoolName(qos, cpuEnhancement[katalystapiconsts.PodAnnotationCPUEnhancementCPUSet])
 		general.Infof("Get pool name %s for pod uid: %s", poolName, pod.UID)
 
+		runtimeClassName := ""
+		if pod.Spec.RuntimeClassName != nil {
+			runtimeClassName = *pod.Spec.RuntimeClassName
+		}
+
 		for _, containerStatus := range pod.Status.ContainerStatuses {
 			containerInfo := &types.ContainerInfo{
-				PodUID:        string(pod.UID),
-				PodName:       pod.Name,
-				ContainerName: containerStatus.Name,
-				Labels:        pod.Labels,
-				Annotations:   pod.Annotations,
-				QoSLevel:      qos,
+				PodUID:           string(pod.UID),
+				PodName:          pod.Name,
+				ContainerName:    containerStatus.Name,
+				Labels:           pod.Labels,
+				Annotations:      pod.Annotations,
+				QoSLevel:         qos,
+				NativeQoSClass:   string(v1qos.GetPodQOS(pod)),
+				RuntimeClassName: runtimeClassName,
 			}
 			podContainerName := native.GeneratePodContainerName(containerInfo.PodName, containerInfo.ContainerName)
 			podContainerNamesMap[podContainerName] = true

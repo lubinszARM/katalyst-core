@@ -117,6 +117,11 @@ func NewTMOConfigDetail(defaultConfigs *TMODefaultConfigurations) *TMOConfigDeta
 type TMOBlockConfig struct {
 	LabelsSelector      labels.Selector
 	AnnotationsSelector labels.Selector
+	// NativeQoSClasses contains the native kubernetes QoS classes to be blocked,
+	// e.g. Guaranteed, Burstable, BestEffort.
+	NativeQoSClasses []string
+	// RuntimeClasses contains the runtime class names to be blocked, e.g. kata-duma.
+	RuntimeClasses []string
 }
 
 type PSIPolicyConf struct {
@@ -169,6 +174,11 @@ func ApplyTMOConfigDetail(tmoConfigDetail *TMOConfigDetail, tmoConfigDetailDynam
 
 func (c *TransparentMemoryOffloadingConfiguration) ApplyConfiguration(conf *crd.DynamicConfigCRD) {
 	if tmoConf := conf.TransparentMemoryOffloadingConfiguration; tmoConf != nil {
+		// reset the block fields parsed by hand, to avoid stale values remained from
+		// the previous revision of the CR.
+		c.BlockConfig.NativeQoSClasses = nil
+		c.BlockConfig.RuntimeClasses = nil
+
 		if tmoConf.Spec.Config.QoSLevelConfig != nil {
 			for _, qosLevelConfig := range tmoConf.Spec.Config.QoSLevelConfig {
 				tmoConfigDetail := NewTMOConfigDetail(c.DefaultConfigurations)
@@ -203,6 +213,15 @@ func (c *TransparentMemoryOffloadingConfiguration) ApplyConfiguration(conf *crd.
 				if err == nil {
 					c.BlockConfig.AnnotationsSelector = selector
 				}
+			}
+			if len(tmoConf.Spec.Config.BlockConfig.NativeQoSClasses) != 0 {
+				c.BlockConfig.NativeQoSClasses = make([]string, 0, len(tmoConf.Spec.Config.BlockConfig.NativeQoSClasses))
+				for _, qosClass := range tmoConf.Spec.Config.BlockConfig.NativeQoSClasses {
+					c.BlockConfig.NativeQoSClasses = append(c.BlockConfig.NativeQoSClasses, string(qosClass))
+				}
+			}
+			if len(tmoConf.Spec.Config.BlockConfig.RuntimeClasses) != 0 {
+				c.BlockConfig.RuntimeClasses = append([]string{}, tmoConf.Spec.Config.BlockConfig.RuntimeClasses...)
 			}
 
 		}
